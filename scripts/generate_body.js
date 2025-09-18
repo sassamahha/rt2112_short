@@ -111,10 +111,9 @@ function hasAudioStream(filepath) {
   const D   = Math.max(5, Math.min(60, Number(dur.toFixed(2)))); // セーフガード
 
   // タイトル/説明（Actionsへ受け渡し）
-  const title = `Rt2112 — ${tagline}`.slice(0, 95);
+  const title = `Road to 2112 — ${tagline}`.slice(0, 95);
   const desc  = [
-    'Full version & series index:',
-    'https://your-landing.example/rt2112',
+    'https://hub.sassamahha.me',
     '',
     '#RoadTo2112 #ShortStory #SciFi #HumansAndRobots'
   ].join('\n');
