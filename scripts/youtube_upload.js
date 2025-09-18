@@ -1,49 +1,88 @@
-// env: YT_CLIENT_ID / YT_CLIENT_SECRET / YT_REFRESH_TOKEN
-// 受け取り: VIDEO_TITLE / VIDEO_DESC / FINAL_MP4 / PRIVACY_STATUS
-import axios from 'axios';
-import fs from 'fs';
+// Upload final.mp4 to YouTube (ShortsOK)
+// Auth: prefer env.YT_ACCESS_TOKEN. Fallback to refresh flow if client creds are present.
+
+import axios from "axios";
+import fs from "fs";
 
 const {
-  YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN,
-  VIDEO_TITLE = 'Rt2112 — Short',
-  VIDEO_DESC  = '#RoadTo2112 #ShortStory #SciFi',
-  FINAL_MP4   = 'final.mp4',
-  PRIVACY_STATUS = 'public'
+  // preferred: already exchanged by workflow
+  YT_ACCESS_TOKEN,
+
+  // fallback (optional)
+  YT_CLIENT_ID,
+  YT_CLIENT_SECRET,
+  YT_REFRESH_TOKEN,
+
+  // video meta
+  VIDEO_TITLE = "Road to 2112",
+  VIDEO_DESC = "",
+  PRIVACY = "unlisted",              // public | unlisted | private
+  FILE_PATH = "final.mp4",           // path to file
 } = process.env;
 
-if (!YT_CLIENT_ID || !YT_CLIENT_SECRET || !YT_REFRESH_TOKEN) {
-  console.error('Missing YT_CLIENT_ID / YT_CLIENT_SECRET / YT_REFRESH_TOKEN');
-  process.exit(1);
+async function getAccessToken() {
+  if (YT_ACCESS_TOKEN) return YT_ACCESS_TOKEN;
+
+  if (YT_CLIENT_ID && YT_CLIENT_SECRET && YT_REFRESH_TOKEN) {
+    const resp = await axios.post(
+      "https://oauth2.googleapis.com/token",
+      new URLSearchParams({
+        client_id: YT_CLIENT_ID,
+        client_secret: YT_CLIENT_SECRET,
+        refresh_token: YT_REFRESH_TOKEN,
+        grant_type: "refresh_token",
+      }).toString(),
+      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+    );
+    return resp.data.access_token;
+  }
+
+  throw new Error("Missing YT_ACCESS_TOKEN or (YT_CLIENT_ID / YT_CLIENT_SECRET / YT_REFRESH_TOKEN)");
 }
 
-async function token() {
-  const body = new URLSearchParams({
-    client_id: YT_CLIENT_ID,
-    client_secret: YT_CLIENT_SECRET,
-    refresh_token: YT_REFRESH_TOKEN,
-    grant_type: 'refresh_token'
-  });
-  const r = await axios.post('https://oauth2.googleapis.com/token', body.toString(),
-    { headers:{'Content-Type':'application/x-www-form-urlencoded'} });
-  return r.data.access_token;
-}
+async function main() {
+  const accessToken = await getAccessToken();
+  if (!fs.existsSync(FILE_PATH)) {
+    throw new Error(`FILE_PATH not found: ${FILE_PATH}`);
+  }
 
-async function upload() {
-  const access = await token();
-  const init = await axios.post(
-    'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status',
+  // 1) start resumable session
+  const start = await axios.post(
+    "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status&shorts=true",
     {
-      snippet: { title: VIDEO_TITLE.slice(0,95), description: VIDEO_DESC, categoryId: '1' },
-      status:  { privacyStatus: PRIVACY_STATUS }
+      snippet: { title: VIDEO_TITLE, description: VIDEO_DESC },
+      status: { privacyStatus: PRIVACY },
     },
-    { headers: { Authorization: `Bearer ${access}`, 'Content-Type':'application/json' } }
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    }
   );
-  const location = init.headers.location;
-  const bin = fs.readFileSync(FINAL_MP4);
-  await axios.put(location, bin, {
-    headers: { Authorization: `Bearer ${access}`, 'Content-Type':'video/*' },
-    maxBodyLength: Infinity, maxContentLength: Infinity
+
+  const location = start.headers.location;
+  if (!location) throw new Error("No resumable upload location");
+
+  // 2) PUT binary
+  const bin = fs.readFileSync(FILE_PATH);
+  const put = await axios.put(location, bin, {
+    headers: { "Content-Type": "video/*" },
+    maxBodyLength: Infinity,
+    maxContentLength: Infinity,
   });
-  console.log('✅ uploaded:', FINAL_MP4);
+
+  const videoId = put.data?.id;
+  console.log("✅ Uploaded videoId:", videoId || "(unknown)");
 }
-upload().catch(e => { console.error('❌', e.response?.data || e); process.exit(1); });
+
+main().catch((e) => {
+  if (e.response?.data) {
+    console.error("YouTube API error:", JSON.stringify(e.response.data, null, 2));
+  } else {
+    console.error(e.stack || e.message || e);
+  }
+  process.exit(1);
+});
