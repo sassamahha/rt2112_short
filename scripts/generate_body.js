@@ -3,7 +3,7 @@
 // env:
 //   VIDEOS_DIR=assets/videos/en
 //   TAGLINES_TXT=data/en/taglines.txt
-//   BGM_DIR=assets/bgm/common            # 任意。無ければ無音
+//   BGM_DIR=assets/bgm/en            # 任意。無ければ無音（共通なら assets/bgm/common を指定）
 //   DURATION_SEC=15                  # 任意長。未指定なら MIN_DUR〜MAX_DUR からランダム
 //   MIN_DUR=10  MAX_DUR=25
 //   MIX_MODE=bgm | mix               # bgm=映像音なし+BGM / mix=映像音+bgmミックス
@@ -11,11 +11,10 @@
 //   HEADLINE_SECS=4  REAPPEAR_AT=11
 //   FONT_FILE=assets/NotoSansJP-Bold.ttf (英語のみなら未指定でもOK)
 
-import { execFile } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -93,18 +92,17 @@ function hasAudioStream(filepath) {
     );
   }
 
-  // フィルタ
+  // フィルタ（映像）
   const fontPart = FONT_FILE ? `fontfile='${path.resolve(FONT_FILE)}':` : '';
   const tag = esc(tagline);
 
-  // Video chain (label [v])
   const vchain = [
     `[0:v]scale=${W}:${H}:force_original_aspect_ratio=increase`,
     `crop=${W}:${H}`,
     `fade=t=in:st=0:d=0.35`,
     `fade=t=out:st=${(D-0.35).toFixed(2)}:d=0.35`,
     `drawtext=${fontPart}text='${tag}':fontsize=72:fontcolor=white:borderw=3:bordercolor=black:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,${Math.min(HEADLINE_SECS,D)})'`,
-    `drawtext=${fontPart}text='${tag}':fontsize=72:fontcolor=white:borderw=3:bordercolor=black:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${Math.min(REAPPEAR_AT,D-0.5)},${D})'`,
+    `drawtext=${fontPart}text='${tag}':fontsize=72:fontcolor=white:borderw=3:bordercolor=black:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${Math.min(REAPPEAR_AT, Math.max(0, D-0.5))},${D})'`,
     `[v]`
   ].join(',');
 
@@ -113,14 +111,14 @@ function hasAudioStream(filepath) {
 
   let mapAudio = [];
   if (bgm && MIX_MODE === 'mix' && hasVidAudio) {
-    // ミックス: 映像音 + BGM
+    // ミックス: 映像音 + BGM（BGMループは -stream_loop -1 で入力側が担当）
     parts.push(`[0:a]volume=${VIDEO_VOL}[a0]`);
-    parts.push(`[1:a]aloop=loop=-1:size=2e+09:start=0,volume=${BGM_VOL}[a1]`);
-    parts.push(`[a0][a1]amix=inputs=2:duration=shortest:dropout_transition=2,afade=t=in:st=0:d=0.5,afade=t=out:st=${(D-0.5).toFixed(2)}:d=0.5[aout]`);
+    parts.push(`[1:a]volume=${BGM_VOL}[a1]`);
+    parts.push(`[a0][a1]amix=inputs=2:duration=first:dropout_transition=2,afade=t=in:st=0:d=0.5,afade=t=out:st=${(D-0.5).toFixed(2)}:d=0.5[aout]`);
     mapAudio = ['-map','[aout]'];
   } else if (bgm) {
     // BGMのみ
-    parts.push(`[1:a]aloop=loop=-1:size=2e+09:start=0,volume=${BGM_VOL},afade=t=in:st=0:d=0.5,afade=t=out:st=${(D-0.5).toFixed(2)}:d=0.5[aout]`);
+    parts.push(`[1:a]volume=${BGM_VOL},afade=t=in:st=0:d=0.5,afade=t=out:st=${(D-0.5).toFixed(2)}:d=0.5[aout]`);
     mapAudio = ['-map','[aout]'];
   } else if (hasVidAudio) {
     // 映像音のみ
@@ -132,13 +130,14 @@ function hasAudioStream(filepath) {
   }
 
   const args = ['-y', '-i', video];
-  if (bgm) args.push('-stream_loop','-1','-i', bgm);
+  if (bgm) args.push('-stream_loop','-1','-i', bgm); // BGMを無限ループ入力
 
   args.push(
     '-t', String(D),
     '-filter_complex', parts.join(';'),
     '-map','[v]',
     ...mapAudio,
+    '-shortest',
     '-c:v','libx264','-preset','medium','-r','30',
     ...(mapAudio.includes('-an') ? [] : ['-c:a','aac','-b:a','128k']),
     OUTPUT
