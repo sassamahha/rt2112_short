@@ -45,7 +45,7 @@ jobs:
 
           # レイアウト/テキスト
           FIT_MODE: 'cover'        # 横ぴったり＋上下クロップ
-          INSET_PCT: '0.98'        # 2%の画面余白（1.0で無し）
+          INSET_PCT: '0.94'        # 6％の余白
           TEXT_MARGIN_PCT: '0.06'  # テキスト左右の安全マージン
           FONT_SIZE: '72'
           MAX_LINES: '2'
@@ -54,7 +54,7 @@ jobs:
           # 帯（フル幅）
           BAR_COLOR: 'black'     
           BAR_OPACITY: '0.35'    # 0.25〜0.5 推奨
-          BAR_PAD_PX: '18'       # 文字の上下パディング（px）
+          BAR_PAD_PX: '72'       # 文字の上下パディング（px）
           
           # 文字は白に戻す（黒帯の上でも読みやすく）
           TEXT_COLOR: 'white'
