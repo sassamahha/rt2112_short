@@ -1,17 +1,24 @@
 name: rt2112-shorts
+
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
   schedule:
-    - cron: '0 23 * * *'  # JST 08:00
-    - cron: '0 11 * * *'  # JST 20:00
+    # GitHub Actions の cron は UTC。JST 08:00 / 20:00 相当
+    - cron: '0 23 * * *'   # JST 08:00
+    - cron: '0 11 * * *'   # JST 20:00
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20 }
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
@@ -19,27 +26,76 @@ jobs:
       - name: Install deps
         run: npm install --no-audit --no-fund
 
+      # ─────────────────────────────
+      # ① 動画生成（final.mp4 を作成）
+      # ─────────────────────────────
       - name: Generate final.mp4
         env:
           VIDEOS_DIR: assets/videos/en
           TAGLINES_TXT: data/en/taglines.txt
           BGM_DIR: assets/bgm/common
+
+          # 長さ
           MIN_DUR: '10'
           MAX_DUR: '25'
-          MIX_MODE: 'bgm'      # or 'mix'
+          # 音
+          MIX_MODE: 'bgm'          # 'bgm' | 'mix'
           BGM_VOL: '0.28'
           VIDEO_VOL: '1.0'
-          ALWAYS_ON_COPY: '1'       # 25秒中央固定
-          COPY_BOX_OPACITY: '0.35'  # 半透明黒パネル（0=無し, 0.2〜0.5推奨）
-          INSET_PCT: '0.94'         # 6%セーフエリア
-          TAG_POS: 'center'         # 中央
-          TAIL_OFF_SEC: '0.8'       # 終了直前にフェードアウト
+
+          # レイアウト/テキスト
+          FIT_MODE: 'cover'        # 横ぴったり＋上下クロップ
+          INSET_PCT: '0.98'        # 2%の画面余白（1.0で無し）
+          TEXT_MARGIN_PCT: '0.06'  # テキスト左右の安全マージン
+          FONT_SIZE: '72'
+          MAX_LINES: '2'
+          TAG_POS: 'center'
+
+          # 広告コピー常時表示
+          ALWAYS_ON_COPY: '1'
+          COPY_BOX_OPACITY: '0.35'
+          TAIL_OFF_SEC: '0.8'
+
+          # タイトル接頭辞
+          TITLE_PREFIX: 'Road to 2112'
         run: node scripts/generate_body.js
 
-      - name: Upload to YouTube
+      # ─────────────────────────────
+      # ② アクセストークン取得（refresh_token → access_token）
+      # ─────────────────────────────
+      - name: Exchange refresh_token for access_token
+        id: token
         env:
           YT_CLIENT_ID:     ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-          PRIVACY_STATUS:   "unlisted"   # 初回は限定公開。OKなら後で "public"
+        run: |
+          set -e
+          RESP=$(curl -sS -X POST https://oauth2.googleapis.com/token \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "client_id=${YT_CLIENT_ID}" \
+            -d "client_secret=${YT_CLIENT_SECRET}" \
+            -d "refresh_token=${YT_REFRESH_TOKEN}" \
+            -d "grant_type=refresh_token")
+          echo "raw=$RESP" | sed 's/".*"/"***"/' 1>/dev/null
+          ACCESS_TOKEN=$(echo "$RESP" | node -pe "JSON.parse(fs.readFileSync(0,'utf8')).access_token")
+          if [ -z "$ACCESS_TOKEN" ]; then echo "$RESP"; exit 1; fi
+          echo "::add-mask::$ACCESS_TOKEN"
+          echo "access_token=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
+
+      # ─────────────────────────────
+      # ③ アップロード（タイトル/説明は①が GITHUB_ENV に書いた値を使用）
+      # ─────────────────────────────
+      - name: Upload to YouTube
+        env:
+          # アップロードに使うアクセストークン
+          YT_ACCESS_TOKEN: ${{ steps.token.outputs.access_token }}
+
+          # generate_body.js が出力した値（VIDEO_TITLE/VIDEO_DESC/FINAL_MP4）
+          VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
+          VIDEO_DESC:  ${{ env.VIDEO_DESC }}
+          FILE_PATH:   ${{ env.FINAL_MP4 }}
+
+          # 公開設定：初回は限定公開、回りが良ければ public に
+          PRIVACY: "unlisted"
         run: node scripts/youtube_upload.js
