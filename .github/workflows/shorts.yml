@@ -52,10 +52,14 @@ jobs:
           TAG_POS: 'center'
 
           # 帯（フル幅）
-          BAR_COLOR: 'white'     # ← 白
+          BAR_COLOR: 'black'     
           BAR_OPACITY: '0.35'    # 0.25〜0.5 推奨
           BAR_PAD_PX: '18'       # 文字の上下パディング（px）
-        
+          
+          # 文字は白に戻す（黒帯の上でも読みやすく）
+          TEXT_COLOR: 'white'
+          TEXT_BORDERW: '3'
+          TEXT_BORDERCOLOR: 'black'
 
           # 広告コピー常時表示
           ALWAYS_ON_COPY: '1'
