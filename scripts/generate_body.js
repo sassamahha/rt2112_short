@@ -1,32 +1,4 @@
 // scripts/generate_body.js
-// Rt2112 Shorts: 9:16動画を可変長で生成（BGM合成＋中央コピー常時表示対応）→ final.mp4
-//
-// ■ 使うENV（Actionsのenvで渡すだけ）
-//   VIDEOS_DIR=assets/videos/en
-//   TAGLINES_TXT=data/en/taglines.txt
-//   BGM_DIR=assets/bgm/common              # 省略可（無音）
-//
-//   DURATION_SEC=15                        # 任意固定秒。未指定なら MIN_DUR〜MAX_DUR からランダム
-//   MIN_DUR=10  MAX_DUR=25
-//
-//   MIX_MODE=bgm|mix                       # bgm=映像音なし+BGM / mix=映像音+bgmミックス
-//   VIDEO_VOL=1.0  BGM_VOL=0.28
-//
-//   // 文字表示（広告モード）
-//   ALWAYS_ON_COPY=1                       # 1でコピーを尺いっぱい中央表示（最後0.8秒前に消す）
-//   HEADLINE_SECS=3                        # ALWAYS_ON_COPY=0のときの冒頭表示秒
-//   REAPPEAR_AT=11                         # 同上：再表示開始秒（未使用なら大きい値でもOK）
-//   TAIL_OFF_SEC=0.8                       # 終了直前に消すバッファ（秒）
-//
-//   // レイアウト
-//   INSET_PCT=0.94                         # 0.80〜1.00：画面を縮小して余白をpad（UI衝突回避）
-//   TAG_POS=top|center|bottom              # コピー位置（既定 center）
-//   COPY_BOX_OPACITY=0.35                  # 半透明ボックス(0〜1)、0でボックス無し
-//
-//   // フォント
-//   FONT_FILE=/path/to/SomeFont.ttf        # 省略可。未指定なら DejaVuSans-Bold を自動使用
-//
-// GitHub Actionsへタイトル/説明を渡す：VIDEO_TITLE, VIDEO_DESC, FINAL_MP4
 
 import { execFile, spawnSync } from 'node:child_process';
 import { promises as fs } from 'node:fs';
@@ -50,19 +22,23 @@ const MIX_MODE  = (process.env.MIX_MODE || 'bgm').toLowerCase(); // 'bgm'|'mix'
 const VIDEO_VOL = Number(process.env.VIDEO_VOL || 1.0);
 const BGM_VOL   = Number(process.env.BGM_VOL   || 0.28);
 
-// テキスト
+// テキスト表示
 const ALWAYS_ON_COPY = process.env.ALWAYS_ON_COPY === '1';
 const HEADLINE_SECS  = Number(process.env.HEADLINE_SECS || 3);
 const REAPPEAR_AT    = Number(process.env.REAPPEAR_AT || 11);
 const TAIL_OFF_SEC   = Number(process.env.TAIL_OFF_SEC || 0.8);
 
 // レイアウト
-const INSET_PCT = Number(process.env.INSET_PCT || 1.0); // 0.80〜1.00
+const FIT_MODE  = (process.env.FIT_MODE || 'cover').toLowerCase(); // 'cover'|'contain'
+const INSET_PCT = Number(process.env.INSET_PCT || 1.0);            // 0.80〜1.00 映像側
 const TAG_POS   = (process.env.TAG_POS || 'center').toLowerCase();
+const TEXT_MARGIN_PCT = Number(process.env.TEXT_MARGIN_PCT || 0.06); // ← テキスト左右マージン（0〜0.2推奨）
 const COPY_BOX_OPACITY = Number(process.env.COPY_BOX_OPACITY || 0.35);
 
 // フォント
 let   FONT_FILE = process.env.FONT_FILE || '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
+const FONT_SIZE = Number(process.env.FONT_SIZE || 72);
+const MAX_LINES = Number(process.env.MAX_LINES || 2);
 
 // 出力
 const OUTPUT  = 'final.mp4';
@@ -91,6 +67,32 @@ function hasAudioStream(filepath) {
   return r.status === 0 && r.stdout.trim().length > 0;
 }
 
+// ---- 追加：テキストの自動改行（横はみ出し防止） --------------------
+function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
+  const safeW = W * (1 - 2 * Math.max(0, Math.min(0.2, marginPct))); // 左右の安全幅を確保
+  const avgCharW = fontSize * 0.56;     // だいたいの英字幅（経験値）
+  const maxChars = Math.max(8, Math.floor(safeW / avgCharW));
+
+  const words = text.replace(/\s+/g, ' ').trim().split(' ');
+  const lines = [];
+  let cur = '';
+
+  for (const w of words) {
+    const cand = cur ? cur + ' ' + w : w;
+    if (cand.length <= maxChars) {
+      cur = cand;
+    } else {
+      lines.push(cur);
+      cur = w;
+      if (lines.length >= maxLines - 1) break;
+    }
+  }
+  if (cur) lines.push(cur);
+
+  return lines.join('\n');
+}
+// -------------------------------------------------------------------
+
 (async () => {
   await fs.mkdir(TMP_DIR, { recursive: true });
 
@@ -101,17 +103,19 @@ function hasAudioStream(filepath) {
 
   const taglines = await readLines(TAGLINES_TXT);
   if (!taglines.length) throw new Error(`No taglines in ${TAGLINES_TXT}`);
-  const tagline = pick(taglines);
+  const taglineRaw = pick(taglines);
+  const taglineWrapped = wrapCopy(taglineRaw, FONT_SIZE, TEXT_MARGIN_PCT, MAX_LINES);
 
   const bgmFiles = await listFiles(BGM_DIR, ['.mp3','.wav','.m4a']).catch(() => []);
   const bgm = bgmFiles.length ? pick(bgmFiles) : null;
 
   // 尺
   const dur = DURATION_SEC ?? (MIN_DUR + Math.random() * (MAX_DUR - MIN_DUR));
-  const D   = Math.max(5, Math.min(60, Number(dur.toFixed(2)))); // セーフガード
+  const D   = Math.max(5, Math.min(60, Number(dur.toFixed(2))));
 
   // タイトル/説明（Actionsへ受け渡し）
-  const title = `Road to 2112 — ${tagline}`.slice(0, 95);
+  const TITLE_PREFIX = process.env.TITLE_PREFIX || 'Road to 2112';
+  const title = `${TITLE_PREFIX} — ${taglineRaw}`.slice(0, 95);
   const desc  = [
     'https://hub.sassamahha.me',
     '',
@@ -123,11 +127,11 @@ function hasAudioStream(filepath) {
     );
   }
 
-  // drawtext用：本文ではなく広告コピー。textfile方式で安全。
+  // drawtext用テキスト
   const tagFile = path.join(TMP_DIR, 'tagline.txt');
-  await fs.writeFile(tagFile, tagline, 'utf8');
+  await fs.writeFile(tagFile, taglineWrapped, 'utf8');
 
-  // タイミング計算
+  // タイミング
   const appear1To  = ALWAYS_ON_COPY ? Math.max(0, D - TAIL_OFF_SEC) : Math.min(HEADLINE_SECS, D);
   const appear2At  = ALWAYS_ON_COPY ? 9999 : Math.min(REAPPEAR_AT, Math.max(0, D - 0.5));
   const appear2End = Math.max(0, D - TAIL_OFF_SEC).toFixed(2);
@@ -141,29 +145,45 @@ function hasAudioStream(filepath) {
     TAG_POS === 'bottom' ? 'h*0.82-text_h' :
                             '(h-text_h)/2';
 
-  // 余白（インセット）
-  const innerW = Math.round(W * Math.min(1, Math.max(0.8, INSET_PCT)));
-  const innerH = Math.round(H * Math.min(1, Math.max(0.8, INSET_PCT)));
+  // フィット方法
+  const inset = Math.min(1, Math.max(0.8, INSET_PCT || 1));
+  let fitFilters;
+  if (FIT_MODE === 'cover') {
+    fitFilters = [
+      `scale=${W}:${H}:force_original_aspect_ratio=increase`,
+      `crop=${W}:${H}`
+    ];
+    if (inset < 1) {
+      const innerW = Math.round(W * inset);
+      const innerH = Math.round(H * inset);
+      fitFilters.push(`scale=${innerW}:${innerH}`, `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2`);
+    }
+  } else {
+    const innerW = Math.round(W * inset);
+    const innerH = Math.round(H * inset);
+    fitFilters = [
+      `scale=${innerW}:${innerH}:force_original_aspect_ratio=decrease`,
+      `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2`
+    ];
+  }
 
-  // drawtext共通（半透明ボックスON/OFF）
+  // drawtext共通（半透明ボックス）
   const textCommon =
-    `fontfile=${FONT_FILE}:textfile=${tagFile}:fontsize=72:fontcolor=white:borderw=3:bordercolor=black` +
+    `fontfile=${FONT_FILE}:textfile=${tagFile}:fontsize=${FONT_SIZE}:fontcolor=white:borderw=3:bordercolor=black` +
     (COPY_BOX_OPACITY > 0 ? `:box=1:boxcolor=black@${COPY_BOX_OPACITY}:boxborderw=18` : '');
 
-  // ---- filter_complex をファイルに出力（クォート事故防止）----
+  // フィルタグラフ
   const vFilters = [
-    `[0:v]scale=${innerW}:${innerH}:force_original_aspect_ratio=decrease`,
-    `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2`,
+    `[0:v]${fitFilters.join(',')}`,
     `fade=t=in:st=0:d=0.35`,
     `fade=t=out:st=${fadeOutSt}:d=0.35`,
-    `drawtext=${textCommon}:x=(w-text_w)/2:y=${tagYExpr}:enable='between(t,0,${appear1To})'`
+    // テキストは自動改行済み。中央寄せでも左右マージン内に収まる
+    `drawtext=${textCommon}:x=(w-text_w)/2:y=${tagYExpr}:enable='between(t,0,${appear1To})'`,
   ];
   if (!ALWAYS_ON_COPY) {
-    vFilters.push(
-      `drawtext=${textCommon}:x=(w-text_w)/2:y=${tagYExpr}:enable='between(t,${appear2At},${appear2End})'`
-    );
+    vFilters.push(`drawtext=${textCommon}:x=(w-text_w)/2:y=${tagYExpr}:enable='between(t,${appear2At},${appear2End})'`);
   }
-  const vChain = vFilters.join(',') + `[v]`; // ← [v] はカンマ無しで直結
+  const vChain = vFilters.join(',') + `[v]`;
 
   const hasVidAudio = hasAudioStream(video);
   let aChain = '';
@@ -188,11 +208,10 @@ function hasAudioStream(filepath) {
   const filterGraph = aChain ? `${vChain};${aChain}\n` : `${vChain}\n`;
   const fcPath = path.join(TMP_DIR, 'filters.txt');
   await fs.writeFile(fcPath, filterGraph, 'utf8');
-  // ----------------------------------------------------
 
   // ffmpeg 実行
   const args = ['-y', '-i', video];
-  if (bgm) args.push('-stream_loop','-1','-i', bgm); // BGMは入力側でループ
+  if (bgm) args.push('-stream_loop','-1','-i', bgm);
 
   args.push(
     '-t', String(D),
@@ -209,5 +228,5 @@ function hasAudioStream(filepath) {
   console.log('✅ generated:', OUTPUT, `(${D}s)`);
   console.log('🎬 source:', path.basename(video));
   if (bgm) console.log('🎵 bgm:', path.basename(bgm), `mode=${MIX_MODE}`);
-  console.log('📝 tagline:', tagline);
+  console.log('📝 tagline:', taglineWrapped.replace(/\n/g,' / '));
 })();
