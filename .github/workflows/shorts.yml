@@ -45,7 +45,7 @@ jobs:
 
           # レイアウト/テキスト
           FIT_MODE: 'cover'        # 横ぴったり＋上下クロップ
-          INSET_PCT: '0.92'        # 8％の余白
+          INSET_PCT: '0.90'        # 10％の余白
           TEXT_MARGIN_PCT: '0.06'  # テキスト左右の安全マージン
           FONT_SIZE: '72'
           MAX_LINES: '2'
@@ -106,6 +106,6 @@ jobs:
           VIDEO_DESC:  ${{ env.VIDEO_DESC }}
           FILE_PATH:   ${{ env.FINAL_MP4 }}
 
-          # 公開設定：初回は限定公開、回りが良ければ public に
-          PRIVACY: "unlisted"
+          # 公開設定：修正中は限定公開(unlisted)、稼働中は公開（public）
+          PRIVACY: "public"
         run: node scripts/youtube_upload.js
