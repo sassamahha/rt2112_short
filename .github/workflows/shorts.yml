@@ -51,9 +51,15 @@ jobs:
           MAX_LINES: '2'
           TAG_POS: 'center'
 
+          # 帯（フル幅）
+          BAR_COLOR: 'white'     # ← 白
+          BAR_OPACITY: '0.35'    # 0.25〜0.5 推奨
+          BAR_PAD_PX: '18'       # 文字の上下パディング（px）
+        
+
           # 広告コピー常時表示
           ALWAYS_ON_COPY: '1'
-          COPY_BOX_OPACITY: '0.35'
+          COPY_BOX_OPACITY: '0'
           TAIL_OFF_SEC: '0.8'
 
           # タイトル接頭辞
