@@ -1,0 +1,42 @@
+name: rt2112-shorts
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 23 * * *'  # JST 08:00
+    - cron: '0 11 * * *'  # JST 20:00
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Generate final.mp4
+        env:
+          VIDEOS_DIR: assets/videos/en
+          TAGLINES_TXT: data/en/taglines.txt
+          BGM_DIR: assets/bgm/common
+          MIN_DUR: '10'
+          MAX_DUR: '25'
+          MIX_MODE: 'bgm'      # or 'mix'
+          BGM_VOL: '0.3'
+          VIDEO_VOL: '1.0'
+          HEADLINE_SECS: '4'
+          REAPPEAR_AT: '11'
+        run: node scripts/generate_body.js
+
+      - name: Upload to YouTube
+        env:
+          YT_CLIENT_ID:     ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          PRIVACY_STATUS:   "unlisted"   # 初回は限定公開。OKなら後で "public"
+        run: node scripts/youtube_upload.js

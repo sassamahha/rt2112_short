@@ -1,0 +1,13 @@
+{
+  "name": "rt2112_short",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "gen": "node scripts/generate_body.js",
+    "upload": "node scripts/youtube_upload.js",
+    "pub": "npm run gen && npm run upload"
+  },
+  "dependencies": {
+    "axios": "^1.7.2"
+  }
+}
