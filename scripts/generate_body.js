@@ -28,7 +28,7 @@ const REAPPEAR_AT   = Number(process.env.REAPPEAR_AT || 11);
 let FONT_FILE = process.env.FONT_FILE || '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
 
 const OUTPUT  = 'final.mp4';
-const TMP_DIR = path.join(__dirname, '..', 'out'); // 一時ファイル置き場
+const TMP_DIR = path.join(__dirname, '..', 'out');
 const W = 1080, H = 1920;
 
 const run = (cmd, args) =>
@@ -57,7 +57,7 @@ function hasAudioStream(filepath) {
   await fs.mkdir(TMP_DIR, { recursive: true }).catch(() => {});
 
   // 素材
-  const vids = await listFiles(VIDEOS_DIR, ['.mp4','.mov','.mkv','.mp4','.MP4','.MOV']);
+  const vids = await listFiles(VIDEOS_DIR, ['.mp4','.mov','.mkv','.MP4','.MOV']);
   if (!vids.length) throw new Error(`No videos in ${VIDEOS_DIR}`);
   const video = pick(vids);
 
@@ -85,28 +85,27 @@ function hasAudioStream(filepath) {
     );
   }
 
-  // textfile を用意（句読点・特殊文字を安全に）
+  // textfile を用意
   const tagFile = path.join(TMP_DIR, 'tagline.txt');
   await fs.writeFile(tagFile, tagline, 'utf8');
 
-  // ----- filter_complex をファイル化 -----
   const appear1To = Math.min(HEADLINE_SECS, D);
   const appear2At = Math.min(REAPPEAR_AT, Math.max(0, D - 0.5));
   const fadeOutSt = (D - 0.35).toFixed(2);
   const aFadeOut  = (D - 0.5).toFixed(2);
 
-  // 映像チェーン
-  const vChain = [
+  // ---- ここが修正ポイント：ラベル前のカンマを無くす ----
+  const vFilters = [
     `[0:v]scale=${W}:${H}:force_original_aspect_ratio=increase`,
     `crop=${W}:${H}`,
     `fade=t=in:st=0:d=0.35`,
     `fade=t=out:st=${fadeOutSt}:d=0.35`,
     `drawtext=fontfile=${FONT_FILE}:textfile=${tagFile}:fontsize=72:fontcolor=white:borderw=3:bordercolor=black:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,${appear1To})'`,
-    `drawtext=fontfile=${FONT_FILE}:textfile=${tagFile}:fontsize=72:fontcolor=white:borderw=3:bordercolor=black:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${appear2At},${D})'`,
-    `[v]`
-  ].join(',');
+    `drawtext=fontfile=${FONT_FILE}:textfile=${tagFile}:fontsize=72:fontcolor=white:borderw=3:bordercolor=black:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${appear2At},${D})'`
+  ];
+  const vChain = vFilters.join(',') + `[v]`; // ← 末尾にカンマなしで [v] を直結
+  // -----------------------------------------------------
 
-  // 音声チェーン
   const hasVidAudio = hasAudioStream(video);
   let aChain = '';
   let mapAudio = [];
@@ -130,7 +129,6 @@ function hasAudioStream(filepath) {
   const filterGraph = aChain ? `${vChain};${aChain}\n` : `${vChain}\n`;
   const fcPath = path.join(TMP_DIR, 'filters.txt');
   await fs.writeFile(fcPath, filterGraph, 'utf8');
-  // ---------------------------------------
 
   // ffmpeg 実行
   const args = ['-y', '-i', video];
