@@ -27,10 +27,13 @@ jobs:
           MIN_DUR: '10'
           MAX_DUR: '25'
           MIX_MODE: 'bgm'      # or 'mix'
-          BGM_VOL: '0.3'
+          BGM_VOL: '0.28'
           VIDEO_VOL: '1.0'
-          HEADLINE_SECS: '4'
-          REAPPEAR_AT: '11'
+          ALWAYS_ON_COPY: '1'       # 25秒中央固定
+          COPY_BOX_OPACITY: '0.35'  # 半透明黒パネル（0=無し, 0.2〜0.5推奨）
+          INSET_PCT: '0.94'         # 6%セーフエリア
+          TAG_POS: 'center'         # 中央
+          TAIL_OFF_SEC: '0.8'       # 終了直前にフェードアウト
         run: node scripts/generate_body.js
 
       - name: Upload to YouTube
