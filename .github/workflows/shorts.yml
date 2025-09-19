@@ -74,5 +74,5 @@ jobs:
           VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
           VIDEO_DESC:  ${{ env.VIDEO_DESC }}
           FINAL_MP4:   ${{ env.FINAL_MP4 }}
-          PRIVACY_STATUS: "unlisted"   # 調整中は unlisted / 本番は public
+          PRIVACY_STATUS: "public"   # 調整中は unlisted / 本番は public
         run: node scripts/youtube_upload.js
