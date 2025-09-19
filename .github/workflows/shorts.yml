@@ -83,11 +83,16 @@ jobs:
           echo "::add-mask::$ACCESS_TOKEN"
           echo "access_token=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
 
-      - name: Upload to YouTube
-        env:
-          YT_ACCESS_TOKEN: ${{ steps.token.outputs.access_token }}
-          VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
-          VIDEO_DESC:  ${{ env.VIDEO_DESC }}
-          FILE_PATH:   ${{ env.FINAL_MP4 }}
-          PRIVACY: "public"
-        run: node scripts/youtube_upload.js
+        # ③ アップロード（youtube_upload.js は refresh_token を自前で交換します）
+        - name: Upload to YouTube
+          env:
+            YT_CLIENT_ID:     ${{ secrets.YT_CLIENT_ID }}
+            YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+            YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+        
+            VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
+            VIDEO_DESC:  ${{ env.VIDEO_DESC }}
+            FINAL_MP4:   ${{ env.FINAL_MP4 }}
+
+            PRIVACY_STATUS: "unlisted"   # 公開：public 調整中 unlisted
+          run: node scripts/youtube_upload.js
