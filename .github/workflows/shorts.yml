@@ -3,9 +3,15 @@ name: rt2112-shorts
 on:
   workflow_dispatch: {}
   schedule:
-    # GitHub Actions の cron は UTC。JST 08:00 / 20:00 相当
-    - cron: '0 23 * * *'   # JST 08:00
-    - cron: '0 11 * * *'   # JST 20:00
+    # 08:00 PT
+    - cron: '0 15 * 3-10 *'   # 08:00 PDT (Mar–Oct) = 15:00 UTC
+    - cron: '0 16 * 11,12 *'  # 08:00 PST (Nov–Dec) = 16:00 UTC
+    - cron: '0 16 * 1,2 *'    # 08:00 PST (Jan–Feb) = 16:00 UTC
+
+    # 20:00 PT
+    - cron: '0 3 * 3-10 *'    # 20:00 PDT (Mar–Oct) = 03:00 UTC(翌日)
+    - cron: '0 4 * 11,12 *'   # 20:00 PST (Nov–Dec) = 04:00 UTC
+    - cron: '0 4 * 1,2 *'     # 20:00 PST (Jan–Feb) = 04:00 UTC
 
 jobs:
   publish:

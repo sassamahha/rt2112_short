@@ -1,0 +1,109 @@
+name: rt2112-shorts-ja
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    # GitHub Actions の cron は UTC。JST 08:00 / 20:00 相当（必要なら変えてOK）
+    - cron: '0 23 * * *'   # JST 08:00
+    - cron: '0 11 * * *'   # JST 20:00
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+
+      # ─────────────────────────────
+      # ① 動画生成（final.mp4 を作成）
+      # ─────────────────────────────
+      - name: Generate final.mp4 (JA)
+        env:
+          VIDEOS_DIR: assets/videos/ja
+          TAGLINES_TXT: data/ja/taglines.txt
+          BGM_DIR: assets/bgm/common
+          FONT_FILE: fonts/NotoSansJP-Bold.ttf   # ← 日本語フォントを指定
+          TITLE_PREFIX: 'Road to 2112'           # タイトル頭（必要なら日本語に）
+
+          # 長さ
+          MIN_DUR: '10'
+          MAX_DUR: '25'
+          # 音
+          MIX_MODE: 'bgm'          # 'bgm' | 'mix'
+          BGM_VOL: '0.28'
+          VIDEO_VOL: '1.0'
+
+          # レイアウト/テキスト
+          FIT_MODE: 'cover'        # 横ぴったり＋上下クロップ
+          INSET_PCT: '0.90'        # 10％の余白
+          TEXT_MARGIN_PCT: '0.06'  # テキスト左右の安全マージン
+          FONT_SIZE: '72'
+          MAX_LINES: '2'
+          TAG_POS: 'center'
+
+          # 帯（フル幅）
+          BAR_COLOR: 'black'
+          BAR_OPACITY: '0.35'      # 0.25〜0.5 推奨
+          BAR_PAD_PX: '96'         # 文字の上下パディング（px）
+
+          # 文字（黒帯上で読みやすく）
+          TEXT_COLOR: 'white'
+          TEXT_BORDERW: '3'
+          TEXT_BORDERCOLOR: 'black'
+
+          # 広告コピー常時表示
+          ALWAYS_ON_COPY: '1'
+          COPY_BOX_OPACITY: '0'
+          TAIL_OFF_SEC: '0.8'
+        run: node scripts/generate_body.js
+
+      # ─────────────────────────────
+      # ② アクセストークン取得（refresh_token → access_token）
+      # ─────────────────────────────
+      - name: Exchange refresh_token for access_token
+        id: token
+        env:
+          YT_CLIENT_ID:     ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+        run: |
+          set -e
+          RESP=$(curl -sS -X POST https://oauth2.googleapis.com/token \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "client_id=${YT_CLIENT_ID}" \
+            -d "client_secret=${YT_CLIENT_SECRET}" \
+            -d "refresh_token=${YT_REFRESH_TOKEN}" \
+            -d "grant_type=refresh_token")
+          ACCESS_TOKEN=$(echo "$RESP" | node -pe "JSON.parse(fs.readFileSync(0,'utf8')).access_token")
+          if [ -z "$ACCESS_TOKEN" ]; then echo "$RESP"; exit 1; fi
+          echo "::add-mask::$ACCESS_TOKEN"
+          echo "access_token=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
+
+      # ─────────────────────────────
+      # ③ アップロード（タイトル/説明は①が GITHUB_ENV に書いた値を使用）
+      # ─────────────────────────────
+      - name: Upload to YouTube (JA)
+        env:
+          # アップロードに使うアクセストークン
+          YT_ACCESS_TOKEN: ${{ steps.token.outputs.access_token }}
+
+          # generate_body.js が出力した値（VIDEO_TITLE/VIDEO_DESC/FINAL_MP4）
+          VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
+          VIDEO_DESC:  ${{ env.VIDEO_DESC }}
+          FILE_PATH:   ${{ env.FINAL_MP4 }}
+
+          # 公開設定：修正中は限定公開(unlisted)、稼働中は公開（public）
+          PRIVACY: "public"
+        run: node scripts/youtube_upload.js
