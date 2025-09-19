@@ -64,35 +64,15 @@ jobs:
           TITLE_PREFIX: 'Road to 2112'
         run: node scripts/generate_body.js
 
-      - name: Exchange refresh_token for access_token
-        id: token
+      # YouTube へのアップロード（トークン交換は youtube_upload.js 内）
+      - name: Upload to YouTube
         env:
           YT_CLIENT_ID:     ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-        run: |
-          set -e
-          RESP=$(curl -sS -X POST https://oauth2.googleapis.com/token \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "client_id=${YT_CLIENT_ID}" \
-            -d "client_secret=${YT_CLIENT_SECRET}" \
-            -d "refresh_token=${YT_REFRESH_TOKEN}" \
-            -d "grant_type=refresh_token")
-          ACCESS_TOKEN=$(echo "$RESP" | node -pe "JSON.parse(fs.readFileSync(0,'utf8')).access_token")
-          if [ -z "$ACCESS_TOKEN" ]; then echo "$RESP"; exit 1; fi
-          echo "::add-mask::$ACCESS_TOKEN"
-          echo "access_token=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
 
-        # ③ アップロード（youtube_upload.js は refresh_token を自前で交換します）
-        - name: Upload to YouTube
-          env:
-            YT_CLIENT_ID:     ${{ secrets.YT_CLIENT_ID }}
-            YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
-            YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-        
-            VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
-            VIDEO_DESC:  ${{ env.VIDEO_DESC }}
-            FINAL_MP4:   ${{ env.FINAL_MP4 }}
-
-            PRIVACY_STATUS: "unlisted"   # 公開：public 調整中 unlisted
-          run: node scripts/youtube_upload.js
+          VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
+          VIDEO_DESC:  ${{ env.VIDEO_DESC }}
+          FINAL_MP4:   ${{ env.FINAL_MP4 }}
+          PRIVACY_STATUS: "unlisted"   # 調整中は unlisted / 本番は public
+        run: node scripts/youtube_upload.js
