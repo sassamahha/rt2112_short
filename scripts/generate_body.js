@@ -1,10 +1,10 @@
 // scripts/generate_body.js
 
-
 import { execFile, spawnSync } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import crypto from 'node:crypto';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -78,6 +78,32 @@ function hasAudioStream(filepath) {
   return r.status === 0 && r.stdout.trim().length > 0;
 }
 
+// ===== BGM恒久対策: 壊れ/不安定ファイルはWAVに正規化 =====
+async function normalizeBgm(bgmPath) {
+  if (!bgmPath) return null;
+
+  // 読めない or 拡張子が mp3/m4a は WAV に寄せる（stream_loop と相性◎）
+  const ext = path.extname(bgmPath).toLowerCase();
+  const probeOk = hasAudioStream(bgmPath);
+  const shouldTranscode = !probeOk || ext === '.mp3' || ext === '.m4a';
+
+  if (!shouldTranscode) return bgmPath;
+
+  await fs.mkdir(TMP_DIR, { recursive: true });
+  const tmpWav = path.join(TMP_DIR, `bgm_${crypto.randomBytes(6).toString('hex')}.wav`);
+
+  await run('ffmpeg', [
+    '-y', '-i', bgmPath,
+    '-vn', '-ac', '2', '-ar', '44100',
+    '-c:a', 'pcm_s16le',
+    tmpWav
+  ]);
+
+  return tmpWav;
+}
+// ========================================================
+
+
 // テキストの自動改行（横はみ出し防止）
 function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
   const safeW = W * (1 - 2 * Math.max(0, Math.min(0.2, marginPct)));
@@ -112,6 +138,7 @@ function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
 
   const bgmFiles = await listFiles(BGM_DIR, ['.mp3','.wav','.m4a']).catch(() => []);
   const bgm = bgmFiles.length ? pick(bgmFiles) : null;
+  const safeBgm = await normalizeBgm(bgm); // ← 追加：必ず正規化経由
 
   // 尺
   const dur = DURATION_SEC ?? (MIN_DUR + Math.random() * (MAX_DUR - MIN_DUR));
@@ -184,14 +211,14 @@ function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
   const hasVidAudio = hasAudioStream(video);
   let aChain = '';
   let mapAudio = [];
-  if (bgm && MIX_MODE === 'mix' && hasVidAudio) {
+  if (safeBgm && MIX_MODE === 'mix' && hasVidAudio) {
     aChain = [
       `[0:a]volume=${VIDEO_VOL}[a0]`,
       `[1:a]volume=${BGM_VOL}[a1]`,
       `[a0][a1]amix=inputs=2:duration=first:dropout_transition=2,afade=t=in:st=0:d=0.5,afade=t=out:st=${aFadeOut}:d=0.5[aout]`
     ].join(';');
     mapAudio = ['-map','[aout]'];
-  } else if (bgm) {
+  } else if (safeBgm) {
     aChain = `[1:a]volume=${BGM_VOL},afade=t=in:st=0:d=0.5,afade=t=out:st=${aFadeOut}:d=0.5[aout]`;
     mapAudio = ['-map','[aout]'];
   } else if (hasVidAudio) {
@@ -203,10 +230,11 @@ function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
 
   const filterGraph = aChain ? `${vChain};${aChain}\n` : `${vChain}\n`;
   const fcPath = path.join(TMP_DIR, 'filters.txt');
+  await fs.writeFile(fcPath, ''); // Windows系での BOM 問題避け
   await fs.writeFile(fcPath, filterGraph, 'utf8');
 
   const args = ['-y', '-i', video];
-  if (bgm) args.push('-stream_loop','-1','-i', bgm);
+  if (safeBgm) args.push('-stream_loop','-1','-i', safeBgm);
   args.push(
     '-t', String(D),
     '-filter_complex_script', fcPath,
@@ -221,6 +249,6 @@ function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
   await run('ffmpeg', args);
   console.log('✅ generated:', OUTPUT, `(${D}s)`);
   console.log('🎬 source:', path.basename(video));
-  if (bgm) console.log('🎵 bgm:', path.basename(bgm), `mode=${MIX_MODE}`);
+  if (safeBgm) console.log('🎵 bgm:', path.basename(safeBgm), `mode=${MIX_MODE}`);
   console.log('📝 tagline:', taglineWrapped.replace(/\n/g,' / '));
 })();
