@@ -78,31 +78,46 @@ function hasAudioStream(filepath) {
   return r.status === 0 && r.stdout.trim().length > 0;
 }
 
-// ===== BGM恒久対策: 壊れ/不安定ファイルはWAVに正規化 =====
+/** BGM恒久対策: 壊れ/不安定ファイルをWAVに正規化（失敗時はnullで無音へ） */
 async function normalizeBgm(bgmPath) {
   if (!bgmPath) return null;
 
-  // 読めない or 拡張子が mp3/m4a は WAV に寄せる（stream_loop と相性◎）
-  const ext = path.extname(bgmPath).toLowerCase();
-  const probeOk = hasAudioStream(bgmPath);
-  const shouldTranscode = !probeOk || ext === '.mp3' || ext === '.m4a';
+  const abs = path.resolve(bgmPath);
+  const ext = path.extname(abs).toLowerCase();
+  const needTrans = !hasAudioStream(abs) || ext === '.mp3' || ext === '.m4a';
 
-  if (!shouldTranscode) return bgmPath;
+  if (!needTrans) return abs;
 
   await fs.mkdir(TMP_DIR, { recursive: true });
   const tmpWav = path.join(TMP_DIR, `bgm_${crypto.randomBytes(6).toString('hex')}.wav`);
 
-  await run('ffmpeg', [
-    '-y', '-i', bgmPath,
-    '-vn', '-ac', '2', '-ar', '44100',
-    '-c:a', 'pcm_s16le',
-    tmpWav
-  ]);
-
-  return tmpWav;
+  // 1st try: 解析強化で変換
+  try {
+    await run('ffmpeg', [
+      '-y',
+      '-probesize','100M','-analyzeduration','100M','-fflags','+genpts',
+      '-i', abs,
+      '-vn','-ac','2','-ar','44100','-c:a','pcm_s16le',
+      tmpWav
+    ]);
+    return tmpWav;
+  } catch (e1) {
+    // 2nd try: フォーマットを明示（mp3想定）して再試行
+    try {
+      await run('ffmpeg', [
+        '-y',
+        '-f','mp3','-probesize','100M','-analyzeduration','100M','-fflags','+genpts',
+        '-i', abs,
+        '-vn','-ac','2','-ar','44100','-c:a','pcm_s16le',
+        tmpWav
+      ]);
+      return tmpWav;
+    } catch (e2) {
+      console.warn('⚠️  BGMの正規化に失敗したため無音で続行します:', path.basename(abs));
+      return null;
+    }
+  }
 }
-// ========================================================
-
 
 // テキストの自動改行（横はみ出し防止）
 function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
@@ -136,9 +151,9 @@ function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
   const taglineRaw = pick(taglines);
   const taglineWrapped = wrapCopy(taglineRaw, FONT_SIZE, TEXT_MARGIN_PCT, MAX_LINES);
 
-  const bgmFiles = await listFiles(BGM_DIR, ['.mp3','.wav','.m4a']).catch(() => []);
+  const bgmFiles = await listFiles(BGM_DIR, ['.mp3','.wav','.m4a','.MP3','.WAV','.M4A']).catch(() => []);
   const bgm = bgmFiles.length ? pick(bgmFiles) : null;
-  const safeBgm = await normalizeBgm(bgm); // ← 追加：必ず正規化経由
+  const safeBgm = await normalizeBgm(bgm);
 
   // 尺
   const dur = DURATION_SEC ?? (MIN_DUR + Math.random() * (MAX_DUR - MIN_DUR));
@@ -179,7 +194,7 @@ function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
     fitFilters = [`scale=${innerW}:${innerH}:force_original_aspect_ratio=decrease`, `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2`];
   }
 
-  // 帯の高さと位置（数値で計算）
+  // 帯の高さと位置
   const BAR_H = Math.round(FONT_SIZE + BAR_PAD_PX * 2);
   let yBar;
   if (TAG_POS === 'top')      yBar = Math.round(H * 0.12);
@@ -195,12 +210,10 @@ function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
     `[0:v]${fitFilters.join(',')}`,
     `fade=t=in:st=0:d=0.35`,
     `fade=t=out:st=${fadeOutSt}:d=0.35`,
-    // 帯 + テキスト（第1区間）
     `drawbox=x=0:y=${yBar}:w=${W}:h=${BAR_H}:color=${BAR_COLOR}@${BAR_OPACITY}:t=fill:enable='between(t,0,${appear1To})'`,
     `drawtext=${textCommon}:x=(w-text_w)/2:y=${textYExpr}:enable='between(t,0,${appear1To})'`
   ];
   if (!ALWAYS_ON_COPY) {
-    // 帯 + テキスト（第2区間）
     vFilters.push(
       `drawbox=x=0:y=${yBar}:w=${W}:h=${BAR_H}:color=${BAR_COLOR}@${BAR_OPACITY}:t=fill:enable='between(t,${appear2At},${appear2End})'`,
       `drawtext=${textCommon}:x=(w-text_w)/2:y=${textYExpr}:enable='between(t,${appear2At},${appear2End})'`
@@ -230,7 +243,6 @@ function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
 
   const filterGraph = aChain ? `${vChain};${aChain}\n` : `${vChain}\n`;
   const fcPath = path.join(TMP_DIR, 'filters.txt');
-  await fs.writeFile(fcPath, ''); // Windows系での BOM 問題避け
   await fs.writeFile(fcPath, filterGraph, 'utf8');
 
   const args = ['-y', '-i', video];
@@ -250,5 +262,6 @@ function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
   console.log('✅ generated:', OUTPUT, `(${D}s)`);
   console.log('🎬 source:', path.basename(video));
   if (safeBgm) console.log('🎵 bgm:', path.basename(safeBgm), `mode=${MIX_MODE}`);
+  else console.log('🔇 bgm: none (fallback)');
   console.log('📝 tagline:', taglineWrapped.replace(/\n/g,' / '));
 })();
