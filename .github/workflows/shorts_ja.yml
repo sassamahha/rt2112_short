@@ -3,7 +3,7 @@ name: rt2112-shorts-ja
 on:
   workflow_dispatch: {}
   schedule:
-    # GitHub Actions の cron は UTC。JST 08:00 / 20:00 相当（必要なら変えてOK）
+    # GitHub Actions の cron は UTC。JST 08:00 / 20:00
     - cron: '0 23 * * *'   # JST 08:00
     - cron: '0 11 * * *'   # JST 20:00
 
@@ -23,23 +23,29 @@ jobs:
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
+      - name: Install JP fonts (Noto CJK)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-cjk
+          fc-cache -f
+
       - name: Install deps
         run: npm install --no-audit --no-fund
 
-      # ─────────────────────────────
       # ① 動画生成（final.mp4 を作成）
-      # ─────────────────────────────
       - name: Generate final.mp4 (JA)
         env:
           VIDEOS_DIR: assets/videos/ja
           TAGLINES_TXT: data/ja/taglines.txt
           BGM_DIR: assets/bgm/common
-          FONT_FILE: fonts/NotoSansJP-Bold.ttf   # ← 日本語フォントを指定
-          TITLE_PREFIX: 'Road to 2112'           # タイトル頭（必要なら日本語に）
+          # ランナーに入れた日本語フォントを指定（存在しない場合は fc-list で確認して差し替え）
+          FONT_FILE: /usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc
+          TITLE_PREFIX: 'Road to 2112'
 
           # 長さ
           MIN_DUR: '10'
           MAX_DUR: '25'
+
           # 音
           MIX_MODE: 'bgm'          # 'bgm' | 'mix'
           BGM_VOL: '0.28'
@@ -55,7 +61,7 @@ jobs:
 
           # 帯（フル幅）
           BAR_COLOR: 'black'
-          BAR_OPACITY: '0.35'      # 0.25〜0.5 推奨
+          BAR_OPACITY: '0.35'
           BAR_PAD_PX: '96'         # 文字の上下パディング（px）
 
           # 文字（黒帯上で読みやすく）
@@ -69,9 +75,7 @@ jobs:
           TAIL_OFF_SEC: '0.8'
         run: node scripts/generate_body.js
 
-      # ─────────────────────────────
       # ② アクセストークン取得（refresh_token → access_token）
-      # ─────────────────────────────
       - name: Exchange refresh_token for access_token
         id: token
         env:
@@ -91,19 +95,12 @@ jobs:
           echo "::add-mask::$ACCESS_TOKEN"
           echo "access_token=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
 
-      # ─────────────────────────────
       # ③ アップロード（タイトル/説明は①が GITHUB_ENV に書いた値を使用）
-      # ─────────────────────────────
       - name: Upload to YouTube (JA)
         env:
-          # アップロードに使うアクセストークン
           YT_ACCESS_TOKEN: ${{ steps.token.outputs.access_token }}
-
-          # generate_body.js が出力した値（VIDEO_TITLE/VIDEO_DESC/FINAL_MP4）
           VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
           VIDEO_DESC:  ${{ env.VIDEO_DESC }}
           FILE_PATH:   ${{ env.FINAL_MP4 }}
-
-          # 公開設定：修正中は限定公開(unlisted)、稼働中は公開（public）
-          PRIVACY: "public"
+          PRIVACY: "public"   # 調整中は "unlisted" 推奨
         run: node scripts/youtube_upload.js
