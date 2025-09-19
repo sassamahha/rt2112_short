@@ -1,42 +1,93 @@
 name: rt2112-shorts
+
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
   schedule:
-    - cron: '0 23 * * *'  # JST 08:00
-    - cron: '0 11 * * *'  # JST 20:00
+    # 08:00 PT
+    - cron: '0 15 * 3-10 *'   # 08:00 PDT (Mar–Oct) = 15:00 UTC
+    - cron: '0 16 * 11,12 *'  # 08:00 PST (Nov–Dec) = 16:00 UTC
+    - cron: '0 16 * 1,2 *'    # 08:00 PST (Jan–Feb) = 16:00 UTC
+    # 20:00 PT
+    - cron: '0 3 * 3-10 *'    # 20:00 PDT (Mar–Oct) = 03:00 UTC (next day)
+    - cron: '0 4 * 11,12 *'   # 20:00 PST (Nov–Dec) = 04:00 UTC
+    - cron: '0 4 * 1,2 *'     # 20:00 PST (Jan–Feb) = 04:00 UTC
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20 }
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install deps
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Generate final.mp4
         env:
           VIDEOS_DIR: assets/videos/en
           TAGLINES_TXT: data/en/taglines.txt
           BGM_DIR: assets/bgm/common
+
           MIN_DUR: '10'
           MAX_DUR: '25'
-          MIX_MODE: 'bgm'      # or 'mix'
-          BGM_VOL: '0.3'
+          MIX_MODE: 'bgm'
+          BGM_VOL: '0.28'
           VIDEO_VOL: '1.0'
-          HEADLINE_SECS: '4'
-          REAPPEAR_AT: '11'
+
+          FIT_MODE: 'cover'
+          INSET_PCT: '0.90'
+          TEXT_MARGIN_PCT: '0.06'
+          FONT_SIZE: '72'
+          MAX_LINES: '2'
+          TAG_POS: 'center'
+
+          BAR_COLOR: 'black'
+          BAR_OPACITY: '0.35'
+          BAR_PAD_PX: '96'
+
+          TEXT_COLOR: 'white'
+          TEXT_BORDERW: '3'
+          TEXT_BORDERCOLOR: 'black'
+
+          ALWAYS_ON_COPY: '1'
+          COPY_BOX_OPACITY: '0'
+          TAIL_OFF_SEC: '0.8'
+
+          TITLE_PREFIX: 'Road to 2112'
         run: node scripts/generate_body.js
 
-      - name: Upload to YouTube
+      - name: Exchange refresh_token for access_token
+        id: token
         env:
           YT_CLIENT_ID:     ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-          PRIVACY_STATUS:   "unlisted"   # 初回は限定公開。OKなら後で "public"
+        run: |
+          set -e
+          RESP=$(curl -sS -X POST https://oauth2.googleapis.com/token \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "client_id=${YT_CLIENT_ID}" \
+            -d "client_secret=${YT_CLIENT_SECRET}" \
+            -d "refresh_token=${YT_REFRESH_TOKEN}" \
+            -d "grant_type=refresh_token")
+          ACCESS_TOKEN=$(echo "$RESP" | node -pe "JSON.parse(fs.readFileSync(0,'utf8')).access_token")
+          if [ -z "$ACCESS_TOKEN" ]; then echo "$RESP"; exit 1; fi
+          echo "::add-mask::$ACCESS_TOKEN"
+          echo "access_token=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to YouTube
+        env:
+          YT_ACCESS_TOKEN: ${{ steps.token.outputs.access_token }}
+          VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
+          VIDEO_DESC:  ${{ env.VIDEO_DESC }}
+          FILE_PATH:   ${{ env.FINAL_MP4 }}
+          PRIVACY: "public"
         run: node scripts/youtube_upload.js
