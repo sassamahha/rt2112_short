@@ -12,17 +12,34 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ── LFS を必ず取得 ───────────────────────────────
-      - name: Checkout (with LFS)
+      # ── 通常のGitチェックアウト（LFSは使わない） ───────────────
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          lfs: true
 
-      # 受け取り確認（BGM が見えているかをログで確認）
+      # BGM 実体確認（サイズ表示）
       - name: Debug: list BGM files
         run: |
           set -xe
-          ls -l assets/bgm/common | sed -n '1,200p'
+          ls -alh assets/bgm/common | sed -n '1,200p' || true
+
+      # LFSポインタを誤って含んでいないかのガード
+      - name: Guard: ensure real mp3 (not LFS pointers)
+        run: |
+          set -e
+          shopt -s nullglob
+          files=(assets/bgm/common/*.mp3)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::No mp3 found under assets/bgm/common"; exit 1
+          fi
+          bad=0
+          for f in "${files[@]}"; do
+            # LFSポインタは先頭に 'version https://git-lfs.github.com/spec' を含むテキスト
+            if head -c 120 "$f" | grep -qi 'git-lfs.github.com/spec'; then
+              echo "::error::'$f' looks like a Git LFS pointer, not an actual mp3."
+              bad=1
+            fi
+          done
+          [ $bad -eq 0 ] || exit 1
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -47,7 +64,6 @@ jobs:
           VIDEOS_DIR: assets/videos/ja
           TAGLINES_TXT: data/ja/taglines.txt
           BGM_DIR: assets/bgm/common
-          # ランナーに入れた日本語フォント（存在しなければ fc-list で確認）
           FONT_FILE: /usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc
           TITLE_PREFIX: 'Road to 2112'
 
