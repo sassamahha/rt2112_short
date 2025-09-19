@@ -31,24 +31,20 @@ const TAIL_OFF_SEC   = Number(process.env.TAIL_OFF_SEC || 0.8);
 
 // レイアウト
 const FIT_MODE  = (process.env.FIT_MODE || 'cover').toLowerCase(); // 'cover'|'contain'
-const INSET_PCT = Number(process.env.INSET_PCT || 1.0);            // 0.80〜1.00
+const INSET_PCT = Number(process.env.INSET_PCT || 1.0);
 const TAG_POS   = (process.env.TAG_POS || 'center').toLowerCase();
 
-// テキスト・帯
+// テキスト/帯
 let   FONT_FILE = process.env.FONT_FILE || '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
 const FONT_SIZE = Number(process.env.FONT_SIZE || 72);
 const MAX_LINES = Number(process.env.MAX_LINES || 2);
-const TEXT_MARGIN_PCT = Number(process.env.TEXT_MARGIN_PCT || 0.06);  // 折返し用安全幅
+const TEXT_MARGIN_PCT = Number(process.env.TEXT_MARGIN_PCT || 0.06);
 const TEXT_COLOR = process.env.TEXT_COLOR || 'black';
 const TEXT_BORDERW = Number(process.env.TEXT_BORDERW || 2);
 const TEXT_BORDERCOLOR = process.env.TEXT_BORDERCOLOR || 'black';
-
-// フル幅帯（白半透明）
 const BAR_COLOR   = process.env.BAR_COLOR || 'white';
-const BAR_OPACITY = Number(process.env.BAR_OPACITY ?? 0.35); // 0〜1
+const BAR_OPACITY = Number(process.env.BAR_OPACITY ?? 0.35);
 const BAR_PAD_PX  = Number(process.env.BAR_PAD_PX || 18);
-
-// 互換：旧box（使わないので0に）
 const COPY_BOX_OPACITY = Number(process.env.COPY_BOX_OPACITY || 0);
 
 // 出力
@@ -60,6 +56,7 @@ const run = (cmd, args) =>
   new Promise((res, rej) => execFile(cmd, args, { stdio: 'inherit' }, e => e ? rej(e) : res()));
 
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const shuffle = (a) => { for (let i=a.length-1;i>0;i--){const j=(Math.random()* (i+1))|0; [a[i],a[j]]=[a[j],a[i]]} return a; };
 
 async function listFiles(dir, exts) {
   const files = await fs.readdir(dir).catch(() => []);
@@ -78,48 +75,68 @@ function hasAudioStream(filepath) {
   return r.status === 0 && r.stdout.trim().length > 0;
 }
 
-/** BGM恒久対策: 壊れ/不安定ファイルをWAVに正規化（失敗時はnullで無音へ） */
-async function normalizeBgm(bgmPath) {
-  if (!bgmPath) return null;
+// --- BGM恒久対策 ----------------------------------------------------------
 
-  const abs = path.resolve(bgmPath);
-  const ext = path.extname(abs).toLowerCase();
-  const needTrans = !hasAudioStream(abs) || ext === '.mp3' || ext === '.m4a';
-
-  if (!needTrans) return abs;
-
+/** ASCIIにサニタイズしたファイル名で一時コピー */
+async function sanitizeCopy(srcAbs) {
   await fs.mkdir(TMP_DIR, { recursive: true });
-  const tmpWav = path.join(TMP_DIR, `bgm_${crypto.randomBytes(6).toString('hex')}.wav`);
-
-  // 1st try: 解析強化で変換
-  try {
-    await run('ffmpeg', [
-      '-y',
-      '-probesize','100M','-analyzeduration','100M','-fflags','+genpts',
-      '-i', abs,
-      '-vn','-ac','2','-ar','44100','-c:a','pcm_s16le',
-      tmpWav
-    ]);
-    return tmpWav;
-  } catch (e1) {
-    // 2nd try: フォーマットを明示（mp3想定）して再試行
-    try {
-      await run('ffmpeg', [
-        '-y',
-        '-f','mp3','-probesize','100M','-analyzeduration','100M','-fflags','+genpts',
-        '-i', abs,
-        '-vn','-ac','2','-ar','44100','-c:a','pcm_s16le',
-        tmpWav
-      ]);
-      return tmpWav;
-    } catch (e2) {
-      console.warn('⚠️  BGMの正規化に失敗したため無音で続行します:', path.basename(abs));
-      return null;
-    }
-  }
+  const base = path.basename(srcAbs);
+  const safeBase = base.replace(/[^A-Za-z0-9_.-]/g, '_');
+  const dst = path.join(TMP_DIR, `src_${crypto.randomBytes(4).toString('hex')}_${safeBase}`);
+  await fs.copyFile(srcAbs, dst);
+  return dst;
 }
 
-// テキストの自動改行（横はみ出し防止）
+/** 単一BGMをWAVに正規化（解析強化→mp3明示の二段リトライ） */
+async function tryNormalizeOnce(absInput) {
+  const inPath = await sanitizeCopy(absInput);
+  const outWav = path.join(TMP_DIR, `bgm_${crypto.randomBytes(6).toString('hex')}.wav`);
+
+  // Try 1: 解析強化
+  try {
+    await run('ffmpeg', [
+      '-y','-hide_banner','-loglevel','error',
+      '-probesize','100M','-analyzeduration','100M','-fflags','+genpts+discardcorrupt',
+      '-ignore_unknown',
+      '-i', inPath,
+      '-vn','-ac','2','-ar','44100','-c:a','pcm_s16le',
+      outWav
+    ]);
+    return outWav;
+  } catch {}
+
+  // Try 2: フォーマット明示（mp3想定）
+  try {
+    await run('ffmpeg', [
+      '-y','-hide_banner','-loglevel','error',
+      '-f','mp3','-probesize','100M','-analyzeduration','100M','-fflags','+genpts+discardcorrupt',
+      '-ignore_unknown',
+      '-i', inPath,
+      '-vn','-ac','2','-ar','44100','-c:a','pcm_s16le',
+      outWav
+    ]);
+    return outWav;
+  } catch {}
+
+  return null;
+}
+
+/** 複数BGMを順に試して、使える1本のWAVを返す。全滅ならnull */
+async function pickWorkableBgm(candidates) {
+  if (!candidates?.length) return null;
+  const tries = shuffle([...candidates]);  // シャッフルして偏り回避
+  for (const p of tries) {
+    const abs = path.resolve(p);
+    const ok = await tryNormalizeOnce(abs);
+    if (ok) return ok;
+    console.warn('⚠️ BGM変換失敗:', path.basename(abs));
+  }
+  return null;
+}
+
+// -------------------------------------------------------------------------
+
+// テキストの自動改行
 function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
   const safeW = W * (1 - 2 * Math.max(0, Math.min(0.2, marginPct)));
   const avgCharW = fontSize * 0.56;
@@ -152,8 +169,7 @@ function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
   const taglineWrapped = wrapCopy(taglineRaw, FONT_SIZE, TEXT_MARGIN_PCT, MAX_LINES);
 
   const bgmFiles = await listFiles(BGM_DIR, ['.mp3','.wav','.m4a','.MP3','.WAV','.M4A']).catch(() => []);
-  const bgm = bgmFiles.length ? pick(bgmFiles) : null;
-  const safeBgm = await normalizeBgm(bgm);
+  const safeBgm = await pickWorkableBgm(bgmFiles);
 
   // 尺
   const dur = DURATION_SEC ?? (MIN_DUR + Math.random() * (MAX_DUR - MIN_DUR));
@@ -194,15 +210,14 @@ function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
     fitFilters = [`scale=${innerW}:${innerH}:force_original_aspect_ratio=decrease`, `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2`];
   }
 
-  // 帯の高さと位置
+  // 帯
   const BAR_H = Math.round(FONT_SIZE + BAR_PAD_PX * 2);
   let yBar;
-  if (TAG_POS === 'top')      yBar = Math.round(H * 0.12);
+  if (TAG_POS === 'top') yBar = Math.round(H * 0.12);
   else if (TAG_POS === 'bottom') yBar = Math.round(H * 0.82 - BAR_H);
-  else                        yBar = Math.round((H - BAR_H) / 2);
-  const textYExpr = `(${yBar}+(${BAR_H}-text_h)/2)`; // 帯中央にテキスト
+  else yBar = Math.round((H - BAR_H) / 2);
+  const textYExpr = `(${yBar}+(${BAR_H}-text_h)/2)`;
 
-  // 文字描画（帯は drawbox でフル幅）
   const textCommon = `fontfile=${FONT_FILE}:textfile=${tagFile}:fontsize=${FONT_SIZE}:fontcolor=${TEXT_COLOR}:borderw=${TEXT_BORDERW}:bordercolor=${TEXT_BORDERCOLOR}` +
     (COPY_BOX_OPACITY > 0 ? `:box=1:boxcolor=black@${COPY_BOX_OPACITY}:boxborderw=18` : '');
 
@@ -262,6 +277,6 @@ function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
   console.log('✅ generated:', OUTPUT, `(${D}s)`);
   console.log('🎬 source:', path.basename(video));
   if (safeBgm) console.log('🎵 bgm:', path.basename(safeBgm), `mode=${MIX_MODE}`);
-  else console.log('🔇 bgm: none (fallback)');
+  else console.log('🔇 bgm: none (all candidates failed)');  // ← これが続くならBGM素材を差し替え推奨
   console.log('📝 tagline:', taglineWrapped.replace(/\n/g,' / '));
 })();
