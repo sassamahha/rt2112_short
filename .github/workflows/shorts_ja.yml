@@ -12,8 +12,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      # ── LFS を必ず取得 ───────────────────────────────
+      - name: Checkout (with LFS)
         uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      # 受け取り確認（BGM が見えているかをログで確認）
+      - name: Debug: list BGM files
+        run: |
+          set -xe
+          ls -l assets/bgm/common | sed -n '1,200p'
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -38,7 +47,7 @@ jobs:
           VIDEOS_DIR: assets/videos/ja
           TAGLINES_TXT: data/ja/taglines.txt
           BGM_DIR: assets/bgm/common
-          # ランナーに入れた日本語フォントを指定（存在しない場合は fc-list で確認して差し替え）
+          # ランナーに入れた日本語フォント（存在しなければ fc-list で確認）
           FONT_FILE: /usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc
           TITLE_PREFIX: 'Road to 2112'
 
