@@ -1,0 +1,76 @@
+name: rt2112-shorts-ja
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 23 * * *'   # JST 08:00
+    - cron: '0 11 * * *'   # JST 20:00
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      # ★ 日本語フォント（Noto CJK）を入れる
+      - name: Install JP fonts (Noto CJK)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-cjk
+          fc-cache -f
+
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+
+      - name: Generate final.mp4 (JA)
+        env:
+          VIDEOS_DIR: assets/videos/ja
+          TAGLINES_TXT: data/ja/taglines.txt
+          BGM_DIR: assets/bgm/common
+
+          FONT_FILE: /usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc
+
+          MIN_DUR: '10'
+          MAX_DUR: '25'
+          MIX_MODE: 'bgm'
+          BGM_VOL: '0.28'
+          VIDEO_VOL: '1.0'
+
+          FIT_MODE: 'cover'
+          INSET_PCT: '0.90'
+          TEXT_MARGIN_PCT: '0.06'
+          FONT_SIZE: '72'
+          MAX_LINES: '2'
+          TAG_POS: 'center'
+
+          BAR_COLOR: 'black'
+          BAR_OPACITY: '0.35'
+          BAR_PAD_PX: '96'
+          TEXT_COLOR: 'white'
+          TEXT_BORDERW: '3'
+          TEXT_BORDERCOLOR: 'black'
+
+          ALWAYS_ON_COPY: '1'
+          COPY_BOX_OPACITY: '0'
+          TAIL_OFF_SEC: '0.8'
+          TITLE_PREFIX: 'Road to 2112'
+        run: node scripts/generate_body.js
+
+      - name: Upload to YouTube (JA)
+        env:
+          YT_CLIENT_ID:     ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
+          VIDEO_DESC:  ${{ env.VIDEO_DESC }}
+          FINAL_MP4:   ${{ env.FINAL_MP4 }}
+          PRIVACY_STATUS: "unlisted"   # 本番は "public"
+        run: node scripts/youtube_upload.js
