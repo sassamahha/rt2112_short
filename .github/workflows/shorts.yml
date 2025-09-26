@@ -43,7 +43,7 @@ jobs:
           VIDEO_VOL: '1.0'
 
           FIT_MODE: 'cover'
-          INSET_PCT: '0.90'
+          INSET_PCT: '0.98'
           TEXT_MARGIN_PCT: '0.06'
           FONT_SIZE: '72'
           MAX_LINES: '2'
