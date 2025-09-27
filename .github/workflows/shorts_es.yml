@@ -1,4 +1,4 @@
-name: rt2112_shorts_es  # Spain (Madrid) + Mexico (Mexico City) in one file
+name: rt2112-shorts-es  # Spain (Madrid) + Mexico (Mexico City) in one file
 
 on:
   workflow_dispatch: {}
@@ -63,7 +63,7 @@ jobs:
           COPY_BOX_OPACITY: '0'
           TAIL_OFF_SEC: '0.8'
 
-          TITLE_PREFIX: 'Ruta a 2112'
+          TITLE_PREFIX: 'Road to 2112'
         run: node scripts/generate_body.js
 
       - name: Upload to YouTube
