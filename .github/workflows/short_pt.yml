@@ -1,0 +1,77 @@
+name: rt2112-shorts-ptbr  # Brazil (São Paulo, BRT/UTC-3)
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '30 15 * * *'  # 12:30 local → 15:30 UTC
+    - cron: '0 23 * * *'   # 20:00 local → 23:00 UTC
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+
+      - name: Generate final.mp4
+        env:
+          # ====== PT-BR assets ======
+          VIDEOS_DIR: assets/videos/pt
+          TAGLINES_TXT: data/pt/taglines.txt
+          BGM_DIR: assets/bgm/common
+
+          # ====== Length / mix ======
+          MIN_DUR: '11'      # 余裕を持たせて1秒だけ上げた
+          MAX_DUR: '27'      # 末尾切れを避けるため2秒だけ上げた
+          MIX_MODE: 'bgm'
+          BGM_VOL: '0.28'
+          VIDEO_VOL: '1.0'
+
+          # ====== Layout ======
+          FIT_MODE: 'cover'
+          INSET_PCT: '0.98'
+          TEXT_MARGIN_PCT: '0.06'
+          FONT_SIZE: '72'
+          MAX_LINES: '2'
+          TAG_POS: 'center'
+
+          # ====== Caption bar ======
+          BAR_COLOR: 'black'
+          BAR_OPACITY: '0.35'
+          BAR_PAD_PX: '96'
+
+          # ====== Text stroke ======
+          TEXT_COLOR: 'white'
+          TEXT_BORDERW: '3'
+          TEXT_BORDERCOLOR: 'black'
+
+          # ====== Tail / copy ======
+          ALWAYS_ON_COPY: '1'
+          COPY_BOX_OPACITY: '0'
+          TAIL_OFF_SEC: '0'   # ← カットが起きやすいので0に
+
+          TITLE_PREFIX: 'Road to 2112'
+        run: node scripts/generate_body.js
+
+      - name: Upload to YouTube
+        env:
+          YT_CLIENT_ID:     ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+
+          VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
+          VIDEO_DESC:  ${{ env.VIDEO_DESC }}
+          FINAL_MP4:   ${{ env.FINAL_MP4 }}
+          PRIVACY_STATUS: "public"   # 本番: public / テスト: unlisted
+        run: node scripts/youtube_upload.js
