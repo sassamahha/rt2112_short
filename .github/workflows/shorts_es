@@ -1,0 +1,79 @@
+name: rt2112_shorts_es  # Spain (Madrid) + Mexico (Mexico City) in one file
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    # --- Madrid 20:00 local ---
+    # CEST (Mar–Oct, UTC+2) -> 18:00 UTC
+    - cron: '0 18 * 3-10 *'
+    # CET (Nov–Dec, UTC+1) -> 19:00 UTC
+    - cron: '0 19 * 11,12 *'
+    # CET (Jan–Feb, UTC+1) -> 19:00 UTC
+    - cron: '0 19 * 1,2 *'
+
+    # --- Mexico City 20:00 local (UTC-6 year-round) ---
+    - cron: '0 2 * * *'   # 20:00 local -> 02:00 UTC (next day)
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+
+      - name: Generate final.mp4
+        env:
+          VIDEOS_DIR: assets/videos/es
+          TAGLINES_TXT: data/es/taglines.txt
+          BGM_DIR: assets/bgm/common
+
+          MIN_DUR: '10'
+          MAX_DUR: '25'
+          MIX_MODE: 'bgm'
+          BGM_VOL: '0.28'
+          VIDEO_VOL: '1.0'
+
+          FIT_MODE: 'cover'
+          INSET_PCT: '0.98'
+          TEXT_MARGIN_PCT: '0.06'
+          FONT_SIZE: '72'
+          MAX_LINES: '2'
+          TAG_POS: 'center'
+
+          BAR_COLOR: 'black'
+          BAR_OPACITY: '0.35'
+          BAR_PAD_PX: '96'
+
+          TEXT_COLOR: 'white'
+          TEXT_BORDERW: '3'
+          TEXT_BORDERCOLOR: 'black'
+
+          ALWAYS_ON_COPY: '1'
+          COPY_BOX_OPACITY: '0'
+          TAIL_OFF_SEC: '0.8'
+
+          TITLE_PREFIX: 'Ruta a 2112'
+        run: node scripts/generate_body.js
+
+      - name: Upload to YouTube
+        env:
+          YT_CLIENT_ID:     ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+
+          VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
+          VIDEO_DESC:  ${{ env.VIDEO_DESC }}
+          FINAL_MP4:   ${{ env.FINAL_MP4 }}
+          PRIVACY_STATUS: "public"   # 調整中は unlisted / 本番は public
+        run: node scripts/youtube_upload.js
