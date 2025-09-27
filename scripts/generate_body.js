@@ -1,4 +1,4 @@
-// scripts/generate_body.js
+// scripts/generate_body.js (fixed: freeze tail, no black padding)
 import { execFile, spawnSync } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -15,11 +15,16 @@ const BGM_DIR      = process.env.BGM_DIR      || path.join(__dirname, '..', 'ass
 const DURATION_SEC = process.env.DURATION_SEC ? Number(process.env.DURATION_SEC) : null;
 const MIN_DUR      = Number(process.env.MIN_DUR || 10);
 const MAX_DUR      = Number(process.env.MAX_DUR || 25);
-/* アウトロと安全余白（本編の枠を確保する） */
+
+/* アウトロと安全余白（本編の枠を確保する）*/
 const OUTRO_SEC    = Number(process.env.OUTRO_SEC || 3.0);    // 末尾アウトロ（ロゴ/固定コピーなど）
 const SAFETY_SEC   = Number(process.env.SAFETY_SEC || 0.40);  // 丸め対策の余白
-/* 末尾に物理パッド（黒＋無音）を連結。0なら無効 */
-const END_PAD_SEC  = Number(process.env.END_PAD_SEC || 1.0);
+
+/* 末尾ホールド（黒を足さず、最後のフレームを静止保持）*/
+const HOLD_LAST_SEC = Number(process.env.HOLD_LAST_SEC || 0.8);
+
+/* 黒パッドはデフォルト無効（必要なら明示的に >0 に）。*/
+const END_PAD_SEC  = Number(process.env.END_PAD_SEC || 0);
 
 /* ========= 音声 ========= */
 const MIX_MODE  = (process.env.MIX_MODE || 'bgm').toLowerCase(); // 'bgm'|'mix'
@@ -117,8 +122,8 @@ function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
 
   /* ===== 尺 ===== */
   const durTotal = DURATION_SEC ?? (MIN_DUR + Math.random() * (MAX_DUR - MIN_DUR));
-  const D        = Math.max(5, Math.min(60, Number(durTotal.toFixed(2))));    // 総尺（従来どおり）
-  const D_BODY   = Math.max(3, D - OUTRO_SEC - SAFETY_SEC);                   // 本編の終端（ここまでに見せ場完了）
+  const D        = Math.max(5, Math.min(60, Number(durTotal.toFixed(2))));    // 総尺
+  const D_BODY   = Math.max(3, D - OUTRO_SEC - SAFETY_SEC);                   // 本編終端（見せ場ここまで）
 
   /* ===== タイトル/説明（Actionsへ） ===== */
   const TITLE_PREFIX = process.env.TITLE_PREFIX || 'Road to 2112';
@@ -138,8 +143,12 @@ function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
   const appear1To  = ALWAYS_ON_COPY ? Math.max(0, D_BODY - TAIL_OFF_SEC) : Math.min(HEADLINE_SECS, D_BODY);
   const appear2At  = ALWAYS_ON_COPY ? 9999 : Math.min(REAPPEAR_AT, Math.max(0, D_BODY - 0.5));
   const appear2End = Math.max(0, D_BODY - TAIL_OFF_SEC).toFixed(2);
-  const fadeOutSt  = (D_BODY - 0.35).toFixed(2);
-  const aFadeOut   = (D_BODY - 0.5).toFixed(2);
+
+  // テキスト・帯だけ終盤で消す（映像はフェードアウトしない）
+  const box1Enable = `between(t,0,${appear1To})`;
+  const txt1Enable = `between(t,0,${appear1To})`;
+  const box2Enable = `between(t,${appear2At},${appear2End})`;
+  const txt2Enable = `between(t,${appear2At},${appear2End})`;
 
   /* ===== フィット ===== */
   const inset = Math.min(1, Math.max(0.8, INSET_PCT || 1));
@@ -166,57 +175,57 @@ function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
   /* ===== テキスト共通 ===== */
   const textCommon = `fontfile=${FONT_FILE}:textfile=${tagFile}:fontsize=${FONT_SIZE}:fontcolor=${TEXT_COLOR}:borderw=${TEXT_BORDERW}:bordercolor=${TEXT_BORDERCOLOR}`;
 
-  /* ===== 映像フィルタ ===== */
+  /* ===== 映像フィルタ =====
+     - 映像の fade-out は廃止
+     - 最後は tpad=clone で静止保持（HOLD_LAST_SEC）
+  */
   const vFilters = [
     `[0:v]${fitFilters.join(',')}`,
     `fade=t=in:st=0:d=0.35`,
-    `fade=t=out:st=${fadeOutSt}:d=0.35`,
-    `drawbox=x=0:y=${yBar}:w=${W}:h=${BAR_H}:color=${BAR_COLOR}@${BAR_OPACITY}:t=fill:enable='between(t,0,${appear1To})'`,
-    `drawtext=${textCommon}:x=(w-text_w)/2:y=${textYExpr}:enable='between(t,0,${appear1To})'`
+    `drawbox=x=0:y=${yBar}:w=${W}:h=${BAR_H}:color=${BAR_COLOR}@${BAR_OPACITY}:t=fill:enable='${box1Enable}'`,
+    `drawtext=${textCommon}:x=(w-text_w)/2:y=${textYExpr}:enable='${txt1Enable}'`
   ];
   if (!ALWAYS_ON_COPY) {
     vFilters.push(
-      `drawbox=x=0:y=${yBar}:w=${W}:h=${BAR_H}:color=${BAR_COLOR}@${BAR_OPACITY}:t=fill:enable='between(t,${appear2At},${appear2End})'`,
-      `drawtext=${textCommon}:x=(w-text_w)/2:y=${textYExpr}:enable='between(t,${appear2At},${appear2End})'`
+      `drawbox=x=0:y=${yBar}:w=${W}:h=${BAR_H}:color=${BAR_COLOR}@${BAR_OPACITY}:t=fill:enable='${box2Enable}'`,
+      `drawtext=${textCommon}:x=(w-text_w)/2:y=${textYExpr}:enable='${txt2Enable}'`
     );
   }
+  // 末尾ホールド（映像を黒にせず止め絵で延長）
+  vFilters.push(`tpad=stop_mode=clone:stop_duration=${HOLD_LAST_SEC}`);
+
   const vChain = vFilters.join(',') + `[v]`;
 
   /* ===== 音声 ===== */
   const hasVidAudio = hasAudioStream(video);
+  const aFadeOutStart = Math.max(0, D - 0.5 - SAFETY_SEC).toFixed(2); // 総尺終端に合わせて少し早めに
   let aChain = '';
   let mapAudio = [];
   if (bgm && MIX_MODE === 'mix' && hasVidAudio) {
-    // 本編の音＋BGMをミックス。duration=longest で先に尽きない。
     aChain = [
       `[0:a]volume=${VIDEO_VOL}[a0]`,
       `[1:a]volume=${BGM_VOL}[a1]`,
-      `[a0][a1]amix=inputs=2:duration=longest:dropout_transition=2,afade=t=in:st=0:d=0.5,afade=t=out:st=${aFadeOut}:d=0.5[aout]`
+      `[a0][a1]amix=inputs=2:duration=longest:dropout_transition=2,afade=t=in:st=0:d=0.5,afade=t=out:st=${aFadeOutStart}:d=0.5[aout]`
     ].join(';');
     mapAudio = ['-map','[aout]'];
   } else if (bgm) {
-    // BGMのみ（動画に音なし）。BGMはループ、最後でフェードアウト。
-    aChain = `[1:a]volume=${BGM_VOL},afade=t=in:st=0:d=0.5,afade=t=out:st=${aFadeOut}:d=0.5[aout]`;
+    aChain = `[1:a]volume=${BGM_VOL},afade=t=in:st=0:d=0.5,afade=t=out:st=${aFadeOutStart}:d=0.5[aout]`;
     mapAudio = ['-map','[aout]'];
   } else if (hasVidAudio) {
-    // 動画の音のみ
-    aChain = `[0:a]volume=${VIDEO_VOL},afade=t=in:st=0:d=0.5,afade=t=out:st=${aFadeOut}:d=0.5[aout]`;
+    aChain = `[0:a]volume=${VIDEO_VOL},afade=t=in:st=0:d=0.5,afade=t=out:st=${aFadeOutStart}:d=0.5[aout]`;
     mapAudio = ['-map','[aout]'];
   } else {
-    // 完全無音
     mapAudio = ['-an'];
   }
 
-  /* ===== filter_complex をファイル化（クォート安全） ===== */
+  /* ===== filter_complex をファイル化 ===== */
   const filterGraph = aChain ? `${vChain};${aChain}\n` : `${vChain}\n`;
   const fcPath = path.join(TMP_DIR, 'filters.txt');
   await fs.writeFile(fcPath, filterGraph, 'utf8');
 
   /* ===== ffmpeg 実行 =====
-     - 総尺は D（従来どおり）
-     - 映像/音のフェードは本編終端 D_BODY に合わせてある
-     - BGMは -stream_loop -1 で尽きない
-     - 丸め対策：CFR/タイムベース/GOP固定
+     - 総尺は D（HOLD_LAST_SECはフィルタ内で確保）
+     - 映像は黒にフェードしない
   */
   const args = ['-y', '-i', video];
   if (bgm) args.push('-stream_loop','-1','-i', bgm);
@@ -234,55 +243,47 @@ function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
   );
 
   await run('ffmpeg', args);
-  console.log('✅ generated:', OUTPUT, `(${D}s, body=${D_BODY.toFixed(2)}s, outro=${OUTRO_SEC}s, safety=${SAFETY_SEC}s)`);
+  console.log('✅ generated:', OUTPUT, `(${D}s, body=${D_BODY.toFixed(2)}s, outro=${OUTRO_SEC}s, safety=${SAFETY_SEC}s, hold=${HOLD_LAST_SEC}s)`);
   console.log('🎬 source:', path.basename(video));
   if (bgm) console.log('🎵 bgm:', path.basename(bgm), `mode=${MIX_MODE}`);
   console.log('📝 tagline:', taglineWrapped.replace(/\n/g,' / '));
 
-  /* ===== 末尾の黒＋無音を物理的に連結（丸め・切れ防止） ===== */
+  /* ===== 黒の物理連結はデフォ無効 =====
+     どうしても黒が必要なときだけ END_PAD_SEC > 0 にして使う。
+  */
   if (END_PAD_SEC > 0) {
     const padded = 'final_padded.mp4';
     const color  = `color=size=${W}x${H}:rate=30:color=black`;
     const anull  = `anullsrc=channel_layout=stereo:sample_rate=48000`;
-
     const hadAudio = !mapAudio.includes('-an');
 
-    if (hadAudio) {
-      // 元動画に音声あり → そのまま + 黒1秒 + 無音1秒 を concat
-      const padArgs = [
-        '-y',
-        '-i', OUTPUT,
-        '-f','lavfi','-t', String(END_PAD_SEC), '-i', color,
-        '-f','lavfi','-t', String(END_PAD_SEC), '-i', anull,
-        '-filter_complex', '[0:v][0:a][1:v][2:a]concat=n=2:v=1:a=1[v][a]',
-        '-map','[v]','-map','[a]',
-        '-c:v','libx264','-r','30','-pix_fmt','yuv420p',
-        '-c:a','aac','-b:a','128k',
-        '-video_track_timescale','30000','-g','60','-sc_threshold','0',
-        padded
-      ];
-      await run('ffmpeg', padArgs);
-    } else {
-      // 音声なし → 無音を D 秒 と END_PAD_SEC 秒 で作って audio も concat
-      const padArgs = [
-        '-y',
-        '-i', OUTPUT,                                           // 0: video only
-        '-f','lavfi','-t', String(END_PAD_SEC), '-i', color,    // 1: black END_PAD_SEC
-        '-f','lavfi','-t', String(D),           '-i', anull,    // 2: silence D
-        '-f','lavfi','-t', String(END_PAD_SEC), '-i', anull,    // 3: silence END_PAD_SEC
-        '-filter_complex',
-          '[0:v][1:v]concat=n=2:v=1:a=0[v];[2:a][3:a]concat=n=2:v=0:a=1[a]',
-        '-map','[v]','-map','[a]',
-        '-c:v','libx264','-r','30','-pix_fmt','yuv420p',
-        '-c:a','aac','-b:a','128k',
-        '-video_track_timescale','30000','-g','60','-sc_threshold','0',
-        padded
-      ];
-      await run('ffmpeg', padArgs);
-    }
+    const padArgs = hadAudio
+      ? [
+          '-y',
+          '-i', OUTPUT,
+          '-f','lavfi','-t', String(END_PAD_SEC), '-i', color,
+          '-f','lavfi','-t', String(END_PAD_SEC), '-i', anull,
+          '-filter_complex', '[0:v][0:a][1:v][2:a]concat=n=2:v=1:a=1[v][a]',
+          '-map','[v]','-map','[a]',
+          '-c:v','libx264','-r','30','-pix_fmt','yuv420p',
+          '-c:a','aac','-b:a','128k',
+          '-video_track_timescale','30000','-g','60','-sc_threshold','0',
+          padded
+        ]
+      : [
+          '-y',
+          '-i', OUTPUT,
+          '-f','lavfi','-t', String(END_PAD_SEC), '-i', color,
+          '-filter_complex', '[0:v][1:v]concat=n=2:v=1:a=0[v]',
+          '-map','[v]',
+          '-c:v','libx264','-r','30','-pix_fmt','yuv420p',
+          '-video_track_timescale','30000','-g','60','-sc_threshold','0',
+          padded
+        ];
 
+    await run('ffmpeg', padArgs);
     await fs.rename(padded, OUTPUT);
-    console.log(`🧷 end padded: +${END_PAD_SEC}s (black + silence)`);
+    console.log(`🧷 end padded: +${END_PAD_SEC}s (black${hadAudio ? ' + silence' : ''})`);
   }
 })().catch(e => {
   console.error('❌ generate_body failed:', e);
