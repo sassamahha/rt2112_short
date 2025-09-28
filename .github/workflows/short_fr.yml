@@ -1,0 +1,78 @@
+name: rt2112-shorts-fr
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    # 08:00 パリ時間
+    - cron: '0 6 * 3-10 *'   # 08:00 CEST (Mar–Oct, Paris) = 06:00 UTC
+    - cron: '0 7 * 11,12 *'  # 08:00 CET (Nov–Dec, Paris) = 07:00 UTC
+    - cron: '0 7 * 1,2 *'    # 08:00 CET (Jan–Feb, Paris) = 07:00 UTC
+    # 20:00 パリ時間
+    - cron: '0 18 * 3-10 *'  # 20:00 CEST (Mar–Oct, Paris) = 18:00 UTC
+    - cron: '0 19 * 11,12 *' # 20:00 CET (Nov–Dec, Paris) = 19:00 UTC
+    - cron: '0 19 * 1,2 *'   # 20:00 CET (Jan–Feb, Paris) = 19:00 UTC
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+
+      - name: Generate final.mp4
+        env:
+          VIDEOS_DIR: assets/videos/fr
+          TAGLINES_TXT: data/fr/taglines.txt
+          BGM_DIR: assets/bgm/common
+
+          MIN_DUR: '12'
+          MAX_DUR: '27'
+          MIX_MODE: 'bgm'
+          BGM_VOL: '0.28'
+          VIDEO_VOL: '1.0'
+
+          FIT_MODE: 'cover'
+          INSET_PCT: '0.98'
+          TEXT_MARGIN_PCT: '0.06'
+          FONT_SIZE: '72'
+          MAX_LINES: '2'
+          TAG_POS: 'center'
+
+          BAR_COLOR: 'black'
+          BAR_OPACITY: '0.35'
+          BAR_PAD_PX: '96'
+
+          TEXT_COLOR: 'white'
+          TEXT_BORDERW: '3'
+          TEXT_BORDERCOLOR: 'black'
+
+          ALWAYS_ON_COPY: '1'
+          COPY_BOX_OPACITY: '0'
+          TAIL_OFF_SEC: '0.8'
+
+          TITLE_PREFIX: 'Road to 2112'
+        run: node scripts/generate_body.js
+
+      # YouTube へのアップロード（トークン交換は youtube_upload.js 内）
+      - name: Upload to YouTube
+        env:
+          YT_CLIENT_ID:     ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+
+          VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
+          VIDEO_DESC:  ${{ env.VIDEO_DESC }}
+          FINAL_MP4:   ${{ env.FINAL_MP4 }}
+          PRIVACY_STATUS: "public"   # 調整中は unlisted / 本番は public
+        run: node scripts/youtube_upload.js
