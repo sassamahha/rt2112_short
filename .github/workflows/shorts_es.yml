@@ -5,11 +5,11 @@ on:
   schedule:
     # --- Madrid 20:00 local ---
     # CEST (Mar–Oct, UTC+2) -> 18:00 UTC
-    - cron: '0 18 * 3-10 *'
+    #- cron: '0 18 * 3-10 *'
     # CET (Nov–Dec, UTC+1) -> 19:00 UTC
-    - cron: '0 19 * 11,12 *'
+    #- cron: '0 19 * 11,12 *'
     # CET (Jan–Feb, UTC+1) -> 19:00 UTC
-    - cron: '0 19 * 1,2 *'
+    #- cron: '0 19 * 1,2 *'
 
     # --- Mexico City 20:00 local (UTC-6 year-round) ---
     - cron: '0 2 * * *'   # 20:00 local -> 02:00 UTC (next day)
