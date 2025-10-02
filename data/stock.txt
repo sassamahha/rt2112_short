@@ -1,0 +1,159 @@
+# 簡体字 / data/zh/description.txt
+在 YouTube 上阅读📽️
+https://youtube.com/@sassamahha
+
+在 Kindle 上阅读📚
+https://hub.sassamahha.me
+
+#RoadTo2112 #短篇小说 #科幻 #人与机器人
+
+# 繁體字 / data/zh-Hant/description.txt
+在 YouTube 上閱讀📽️
+https://youtube.com/@sassamahha
+
+在 Kindle 上閱讀📚
+https://hub.sassamahha.me
+
+#RoadTo2112 #短篇小說 #科幻 #人與機器人
+
+# KO / data/ko/description.txt
+유튜브에서 읽기📽️
+https://youtube.com/@sassamahha
+
+킨들에서 읽기📚
+https://hub.sassamahha.me
+
+#RoadTo2112 #단편소설 #SF #인간과로봇
+
+# ID / data/id/description.txt
+Baca di YouTube📽️
+https://youtube.com/@sassamahha
+
+Baca di Kindle📚
+https://hub.sassamahha.me
+
+#RoadTo2112 #Cerpen #FiksiIlmiah #ManusiaDanRobot
+
+# TH / data/th/description.txt
+อ่านบน YouTube📽️
+https://youtube.com/@sassamahha
+
+อ่านบน Kindle📚
+https://hub.sassamahha.me
+
+#RoadTo2112 #เรื่องสั้น #ไซไฟ #มนุษย์กับหุ่นยนต์
+
+# VI / data/vi/description.txt
+Đọc trên YouTube📽️
+https://youtube.com/@sassamahha
+
+Đọc trên Kindle📚
+https://hub.sassamahha.me
+
+#RoadTo2112 #TruyệnNgắn #KhoaHọcViễnTưởng #ConNgườiVàRobot
+
+# RU / data/ru/description.txt
+Читайте на YouTube📽️
+https://youtube.com/@sassamahha
+
+Читайте на Kindle📚
+https://hub.sassamahha.me
+
+#RoadTo2112 #Рассказы #НаучнаяФантастика #ЛюдиИРоботы
+
+# TR / data/tr/description.txt
+YouTube’da oku📽️
+https://youtube.com/@sassamahha
+
+Kindle’da oku📚
+https://hub.sassamahha.me
+
+#RoadTo2112 #KısaHikâye #BilimKurgu #İnsanlarVeRobotlar
+
+# PL / data/pl/description.txt
+Czytaj na YouTube📽️
+https://youtube.com/@sassamahha
+
+Czytaj na Kindle📚
+https://hub.sassamahha.me
+
+#RoadTo2112 #Opowiadanie #SciFi #LudzieIRoboty
+
+# UK / data/uk/description.txt
+Читати на YouTube📽️
+https://youtube.com/@sassamahha
+
+Читати на Kindle📚
+https://hub.sassamahha.me
+
+#RoadTo2112 #Оповідання #НауковаФантастика #ЛюдиТаРоботи
+
+
+# BN / data/bn/description.txt
+ইউটিউবে পড়ুন📽️
+https://youtube.com/@sassamahha
+
+কিণ্ডলে পড়ুন📚
+https://hub.sassamahha.me
+
+#RoadTo2112 #ছোটগল্প #বিজ্ঞানকল্পকাহিনি #মানুষওরোবট
+
+
+# UR / data/ur/description.txt
+یوٹیوب پر پڑھیں📽️
+https://youtube.com/@sassamahha
+
+کنڈل پر پڑھیں📚
+https://hub.sassamahha.me
+
+#RoadTo2112 #افسانہ #سائنس_فکشن #انسان_اور_روبوٹ
+
+
+# TL (Filipino) / data/tl/description.txt
+Basahin sa YouTube📽️
+https://youtube.com/@sassamahha
+
+Basahin sa Kindle📚
+https://hub.sassamahha.me
+
+#RoadTo2112 #MaiklingKuwento #SciFi #TaoAtRobot
+
+
+# AR / data/ar/description.txt
+اقرأ على YouTube📽️
+https://youtube.com/@sassamahha
+
+اقرأ على Kindle📚
+https://hub.sassamahha.me
+
+#RoadTo2112 #قصة_قصيرة #خيال_علمي #البشر_والروبوتات
+
+
+# HI / data/hi/description.txt
+YouTube पर पढ़ें📽️
+https://youtube.com/@sassamahha
+
+Kindle पर पढ़ें📚
+https://hub.sassamahha.me
+
+#RoadTo2112 #लघुकथा #विज्ञानकथा #मनुष्यऔररोबोट
+
+
+# FA / data/fa/description.txt
+در YouTube بخوانید📽️
+https://youtube.com/@sassamahha
+
+در Kindle بخوانید📚
+https://hub.sassamahha.me
+
+#RoadTo2112 #داستان_کوتاه #علمی_تخیلی #انسان_و_ربات
+
+
+# SW / data/sw/description.txt
+Soma kwenye YouTube📽️
+https://youtube.com/@sassamahha
+
+Soma kwenye Kindle📚
+https://hub.sassamahha.me
+
+#RoadTo2112 #HadithiFupi #SciFi #BinadamuNaRoboti
