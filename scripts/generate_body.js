@@ -125,19 +125,44 @@ function wrapCopy(text, fontSize, marginPct, maxLines = 2) {
   const D        = Math.max(5, Math.min(60, Number(durTotal.toFixed(2))));    // 総尺
   const D_BODY   = Math.max(3, D - OUTRO_SEC - SAFETY_SEC);                   // 本編終端（見せ場ここまで）
 
-  /* ===== タイトル/説明（Actionsへ） ===== */
-  const TITLE_PREFIX = process.env.TITLE_PREFIX || 'Road to 2112';
-  const title = `${TITLE_PREFIX} — ${taglineRaw}`.slice(0, 95);
-  const desc  = ['https://hub.sassamahha.me', '', '#RoadTo2112 #ShortStory #SciFi #HumansAndRobots'].join('\n');
-  if (process.env.GITHUB_ENV) {
-    await fs.appendFile(process.env.GITHUB_ENV,
-      `VIDEO_TITLE=${title}\nVIDEO_DESC<<EOF\n${desc}\nEOF\nFINAL_MP4=${path.resolve(OUTPUT)}\n`
-    );
-  }
+/* ===== タイトル/説明（Actionsへ） ===== */
+const TITLE_PREFIX = process.env.TITLE_PREFIX || 'Road to 2112';
+const title = `${TITLE_PREFIX} — ${taglineRaw}`.slice(0, 95);
 
-  /* drawtext用テキストはファイル経由（クォート安全） */
-  const tagFile = path.join(TMP_DIR, 'tagline.txt');
-  await fs.writeFile(tagFile, taglineWrapped, 'utf8');
+// 説明文は data/<lang>/description.txt を最優先
+const baseDir = path.dirname(TAGLINES_TXT);
+let desc;
+try {
+  const raw = await fs.readFile(path.join(baseDir, 'description.txt'), 'utf8');
+  const trimmed = raw.trim();
+  desc = trimmed.length ? trimmed : null;
+} catch {
+  desc = null;
+}
+if (!desc) {
+  // フォールバック（共通テンプレ）
+  desc = [
+    'Read on YouTube📽️',
+    'https://youtube.com/@sassamahha',
+    '',
+    'Read on Kindle📚',
+    'https://hub.sassamahha.me',
+    '',
+    '#RoadTo2112 #ShortStory #SciFi #HumansAndRobots'
+  ].join('\n');
+}
+
+if (process.env.GITHUB_ENV) {
+  await fs.appendFile(
+    process.env.GITHUB_ENV,
+    `VIDEO_TITLE=${title}\nVIDEO_DESC<<EOF\n${desc}\nEOF\nFINAL_MP4=${path.resolve(OUTPUT)}\n`
+  );
+}
+
+/* drawtext用テキストはファイル経由（クォート安全） */
+const tagFile = path.join(TMP_DIR, 'tagline.txt');
+await fs.writeFile(tagFile, taglineWrapped, 'utf8');
+
 
   /* ===== タイミング（本編終端 D_BODY を基準） ===== */
   const appear1To  = ALWAYS_ON_COPY ? Math.max(0, D_BODY - TAIL_OFF_SEC) : Math.min(HEADLINE_SECS, D_BODY);
