@@ -3,7 +3,7 @@ name: rt2112-shorts-ptbr  # Brazil (São Paulo, BRT/UTC-3)
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: '30 15 * * *'  # 12:30 local → 15:30 UTC
+    # - cron: '30 15 * * *'  # 12:30 local → 15:30 UTC
     - cron: '0 23 * * *'   # 20:00 local → 23:00 UTC
 
 jobs:
