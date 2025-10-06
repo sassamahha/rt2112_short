@@ -4,9 +4,9 @@ on:
   workflow_dispatch: {}
   schedule:
     # 08:00 パリ時間
-    - cron: '0 6 * 3-10 *'   # 08:00 CEST (Mar–Oct, Paris) = 06:00 UTC
-    - cron: '0 7 * 11,12 *'  # 08:00 CET (Nov–Dec, Paris) = 07:00 UTC
-    - cron: '0 7 * 1,2 *'    # 08:00 CET (Jan–Feb, Paris) = 07:00 UTC
+    # - cron: '0 6 * 3-10 *'   # 08:00 CEST (Mar–Oct, Paris) = 06:00 UTC
+    # - cron: '0 7 * 11,12 *'  # 08:00 CET (Nov–Dec, Paris) = 07:00 UTC
+    # - cron: '0 7 * 1,2 *'    # 08:00 CET (Jan–Feb, Paris) = 07:00 UTC
     # 20:00 パリ時間
     - cron: '0 18 * 3-10 *'  # 20:00 CEST (Mar–Oct, Paris) = 18:00 UTC
     - cron: '0 19 * 11,12 *' # 20:00 CET (Nov–Dec, Paris) = 19:00 UTC
