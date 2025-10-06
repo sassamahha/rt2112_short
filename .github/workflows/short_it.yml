@@ -34,8 +34,8 @@ jobs:
 
       - name: Generate final.mp4
         env:
-          VIDEOS_DIR: assets/videos/fr
-          TAGLINES_TXT: data/fr/taglines.txt
+          VIDEOS_DIR: assets/videos/it
+          TAGLINES_TXT: data/it/taglines.txt
           BGM_DIR: assets/bgm/common
 
           MIN_DUR: '12'
