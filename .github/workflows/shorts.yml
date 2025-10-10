@@ -1,4 +1,4 @@
-name: rt2112-shorts
+name: rt2112-shorts-en
 
 on:
   workflow_dispatch: {}
