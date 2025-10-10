@@ -9,9 +9,9 @@ on:
     # - cron: '0 7 * 1,2 *'    # 08:00 CET (Jan–Feb, Paris) = 07:00 UTC
   
     # 19:00 ローマ時間
-    - cron: '0 17 * 3-10 *'  # 19:00 CEST (Mar–Oct, Paris) = 17:00 UTC
-    - cron: '0 18 * 11,12 *' # 19:00 CET (Nov–Dec, Paris) = 18:00 UTC
-    - cron: '0 18 * 1,2 *'   # 19:00 CET (Jan–Feb, Paris) = 18:00 UTC
+    # - cron: '0 17 * 3-10 *'  # 19:00 CEST (Mar–Oct, Paris) = 17:00 UTC
+    # - cron: '0 18 * 11,12 *' # 19:00 CET (Nov–Dec, Paris) = 18:00 UTC
+    # - cron: '0 18 * 1,2 *'   # 19:00 CET (Jan–Feb, Paris) = 18:00 UTC
 
 
 jobs:
