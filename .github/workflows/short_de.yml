@@ -4,13 +4,13 @@ on:
   workflow_dispatch: {}
   schedule:
     # 08:00 ドイツ時間
-     - cron: '0 6 * 3-10 *'   # 08:00 CEST (Mar–Oct) = 06:00 UTC
-     - cron: '0 7 * 11,12 *'  # 08:00 CET (Nov–Dec) = 07:00 UTC
-     - cron: '0 7 * 1,2 *'    # 08:00 CET (Jan–Feb) = 07:00 UTC
+    # - cron: '0 6 * 3-10 *'   # 08:00 CEST (Mar–Oct) = 06:00 UTC
+    # - cron: '0 7 * 11,12 *'  # 08:00 CET (Nov–Dec) = 07:00 UTC
+    # - cron: '0 7 * 1,2 *'    # 08:00 CET (Jan–Feb) = 07:00 UTC
     # 20:00 ドイツ時間
-     - cron: '0 18 * 3-10 *'  # 20:00 CEST (Mar–Oct) = 18:00 UTC
-     - cron: '0 19 * 11,12 *' # 20:00 CET (Nov–Dec) = 19:00 UTC
-     - cron: '0 19 * 1,2 *'   # 20:00 CET (Jan–Feb) = 19:00 UTC
+    # - cron: '0 18 * 3-10 *'  # 20:00 CEST (Mar–Oct) = 18:00 UTC
+    # - cron: '0 19 * 11,12 *' # 20:00 CET (Nov–Dec) = 19:00 UTC
+    # - cron: '0 19 * 1,2 *'   # 20:00 CET (Jan–Feb) = 19:00 UTC
 
 jobs:
   publish:
